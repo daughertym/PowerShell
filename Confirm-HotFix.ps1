@@ -81,7 +81,6 @@ begin {
 
         $Result = [PSCustomObject]@{
 
-            HotFixId = $null
             Installed = $false
             InstalledOn = $null
         }
@@ -89,8 +88,6 @@ begin {
         $HotFix = Get-HotFix -ID $Using:ID -ErrorAction SilentlyContinue
 
         if ($HotFix) {
-            
-            $Result.HotFixID = $HotFix.HotFixID
 
             $Result.Installed = $true
 
@@ -130,7 +127,7 @@ process {
 
                         $Result.InvokeStatus = 'Success'
 
-                        $Result.HotFixID = $InvokeResult.HotFixID
+                        $Result.HotFixID = $ID
 
                         $Result.Installed = $InvokeResult.Installed
 
@@ -168,7 +165,7 @@ process {
         
                     ComputerName = $_.PSComputerName.ToUpper()
                     InvokeStatus = 'Success'
-                    HotFixId = $_.HotFixId
+                    HotFixId = $ID
                     Installed = $_.Installed
                     InstalledOn = $_.InstalledOn
                 }
