@@ -65,10 +65,16 @@ param (
 
 begin {
 
-    # Make sure InvokeParallel switch is not being used while piping input
+    # Make sure InvokeParallel switch is not being used with piping input
     if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
 
-        Write-Warning "Cannot accept pipeline input while using the InvokeParallel switch."
+        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
+        break
+    }
+
+    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
+
+        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
         break
     }
 
