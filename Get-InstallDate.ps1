@@ -40,7 +40,7 @@ Date Modified: 17 July 2020
 param (
 
     # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline)]
+    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
     [string[]]
     $ComputerName,
 
