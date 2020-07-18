@@ -1,3 +1,38 @@
+<#
+
+.SYNOPSIS
+Set BIOS webcam/microphone setting on HP computers.
+
+* This script only works on HP computers *
+
+.PARAMETER ComputerName
+Specifies the computer(s) to set BIOS setting on.
+
+.PARAMETER IncludeError
+Optional switch to include errors.
+
+.INPUTS
+You cannot pipe objects to Set-Bios_Webcam_Mic.ps1
+
+.OUTPUTS
+System.Object
+
+.EXAMPLE
+.\Set-Bios_Webcam_Mic.ps1 (Get-Content C:\computers.txt) -Webcam Enable -Microphone Enable
+
+.EXAMPLE
+.\Set-Bios_Webcam_Mic.ps1 (Get-Content C:\computers.txt) -Webcam Disable -Microphone Disable
+
+.EXAMPLE
+.\Set-Bios_Webcam_Mic.ps1 (Get-Content C:\computers.txt) -Webcam Enable -Microphone Enable -IncludeError -Verbose |
+Export-Csv BiosSetting.csv -NoTypeInformation
+
+.NOTES
+Author: Matthew D. Daugherty
+Date Modified: 18 July 2020
+
+#>
+
 #Requires -RunAsAdministrator
 
 [CmdletBinding()]
