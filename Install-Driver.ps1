@@ -6,7 +6,7 @@ Install driver(s) on one or more computers.
 .PARAMETER ComputerName
 Specifies the computer(s) to install driver(s) on.
 
-.PARAMETER DriverFolderPath
+.PARAMETER Path
 Specifies path to folder containing driver(s).
 Default is /Desktop/Drivers
 
@@ -35,7 +35,7 @@ Get-Content C:\computers.txt | .\Install-Driver
 .\Install-Driver -ComputerName PC01,PC02,PC03 -InvokeParallel -IncludeError
 
 .EXAMPLE
-.\Install-Driver -ComputerName PC01,PC02,PC03 -DriverFolderPath C:\Drivers -InvokeParallel -IncludeError
+.\Install-Driver -ComputerName PC01,PC02,PC03 -Path C:\Drivers -InvokeParallel -IncludeError
 
 .NOTES
 Author: Matthew D. Daugherty
@@ -54,7 +54,7 @@ param (
     # Parameter for path to folder containing driver(s)
     [Parameter()]
     [string]
-    $DriverFolderPath = "$env:USERPROFILE\Desktop\Drivers",
+    $Path = "$env:USERPROFILE\Desktop\Drivers",
 
     # Optional switch to Invoke-Command in parrallel
     [Parameter()]
@@ -70,19 +70,19 @@ param (
 begin {
 
     # If DriverFolderPath parameter is used
-    if ($PSBoundParameters.ContainsKey('DriverFolderPath')) {
+    if ($PSBoundParameters.ContainsKey('Path')) {
 
         # Make sure $DriverFolderPath exists
-        if (-not(Test-Path -Path $DriverFolderPath)) {
+        if (-not(Test-Path -Path $Path)) {
 
-            Write-Warning "Path: $DriverFolderPath does not exist."
+            Write-Warning "Path: $Path does not exist."
             break
         }
 
         # Make sure $DriverFolderPath is a Directory
-        if (-not(Get-Item -Path $DriverFolderPath).PSIsContainer) {
+        if (-not(Get-Item -Path $Path).PSIsContainer) {
 
-            Write-Warning "Path: $DriverFolderPath is not a Directory."
+            Write-Warning "Path: $Path is not a Directory."
             break
         }
     }
@@ -101,7 +101,7 @@ begin {
         break
     }
 
-    $DriverToInstall = (Get-ChildItem -Path $DriverFolderPath).Name | 
+    $DriverToInstall = (Get-ChildItem -Path $Path).Name | 
     Out-GridView -Title 'Select driver(s) to install' -OutputMode Multiple
 
     # If no driver(s) selected then break
@@ -171,7 +171,7 @@ process {
 
                 $CopyItemParams = @{
 
-                    Path = "$DriverFolderPath\$Driver"
+                    Path = "$Path\$Driver"
                     Destination = "\\$Computer\C$\Windows\Temp"
                     Recurse = $true
                     Force = $true
@@ -192,7 +192,7 @@ process {
 
                     $CopyItemParams = @{
 
-                        Path = "$DriverFolderPath\$Driver"
+                        Path = "$Path\$Driver"
                         Destination = 'C:\Windows\Temp'
                         ToSession = $Session
                         Recurse = $true
