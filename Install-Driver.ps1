@@ -34,6 +34,9 @@ Get-Content C:\computers.txt | .\Install-Driver
 .EXAMPLE
 .\Install-Driver -ComputerName PC01,PC02,PC03 -InvokeParallel -IncludeError
 
+.EXAMPLE
+.\Install-Driver -ComputerName PC01,PC02,PC03 -DriverFolderPath C:\Drivers -InvokeParallel -IncludeError
+
 .NOTES
 Author: Matthew D. Daugherty
 Date Modified: 20 July 2020
