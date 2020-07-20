@@ -36,7 +36,7 @@ Get-Content C:\computers.txt | .\Install-Driver
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 20 July 2020
 
 #>
 
@@ -143,9 +143,9 @@ begin {
 
 process {
 
-    Write-Verbose 'Copying driver(s) to computer(s)...' -Verbose
-
     foreach ($Computer in $ComputerName) {
+
+        $Computer = $Computer.ToUpper()
 
         foreach ($Driver in $DriverToInstall) {
 
@@ -162,6 +162,8 @@ process {
                 }
 
                 Copy-Item @CopyItemParams
+
+                Write-Verbose "Driver ($Driver) copied to $Computer" -Verbose
             }
 
             # Copy driver through session if C$ is not accessible
@@ -181,6 +183,8 @@ process {
                     }
 
                     Copy-Item @CopyItemParams
+
+                    Write-Verbose "Driver ($Driver) copied to $Computer" -Verbose
 
                     Remove-PSSession -Session $Session
                 }
