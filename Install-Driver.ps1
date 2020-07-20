@@ -69,10 +69,22 @@ param (
 
 begin {
 
-    if (-not(Test-Path -Path $DriverFolderPath)) {
+    # If DriverFolderPath parameter is used
+    if ($PSBoundParameters.ContainsKey('DriverFolderPath')) {
 
-        Write-Warning "Path: $DriverFolderPath does not exist."
-        break
+        # Make sure $DriverFolderPath exists
+        if (-not(Test-Path -Path $DriverFolderPath)) {
+
+            Write-Warning "Path: $DriverFolderPath does not exist."
+            break
+        }
+
+        # Make sure $DriverFolderPath is a Directory
+        if (-not(Get-Item -Path $DriverFolderPath).PSIsContainer) {
+
+            Write-Warning "Path: $DriverFolderPath is not a Directory."
+            break
+        }
     }
 
     # Make sure InvokeParallel switch is not being used with piping input
@@ -82,6 +94,7 @@ begin {
         break
     }
 
+    # Make sure Invoke-Parallel switch is not being used with only one computer name
     if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
 
         Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
@@ -91,6 +104,7 @@ begin {
     $DriverToInstall = (Get-ChildItem -Path $DriverFolderPath).Name | 
     Out-GridView -Title 'Select driver(s) to install' -OutputMode Multiple
 
+    # If no driver(s) selected then break
     if (-not($DriverToInstall)) {break}
 
     # Scriptblock for Invoke-Command
