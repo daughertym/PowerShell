@@ -182,7 +182,6 @@ process {
 
                 Write-Verbose "Driver ($Driver) copied to $Computer" -Verbose
             }
-
             # Copy driver through session if C$ is not accessible
             catch {
 
