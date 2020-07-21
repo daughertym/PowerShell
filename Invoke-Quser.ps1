@@ -3,7 +3,7 @@
 .SYNOPSIS
 Invoke quser.exe on one or more computers and return quser as an object.
 
-Use to see which user is logged onto computer(s).
+Use to see which users are logged on to computer(s).
 
 .PARAMETER ComputerName
 Specifies the computer(s) to invoke quser.exe on.
@@ -24,11 +24,17 @@ System.Object
 .\Invoke-Quser -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-Invoke-Quser -ComputerName PC01,PC02,PC03 -IncludeError
+Get-Content C:\computers.txt | Invoke-Quser
+
+.EXAMPLE
+.\Invoke-Quser (Get-Content C:\computers.txt) -InvokeParallel
+
+.EXAMPLE
+.\Invoke-Quser (Get-Content C:\computers.txt) -InvokeParallel -IncludeError
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 21 July 2020
 
 #>
 
@@ -87,19 +93,10 @@ begin {
         
                     if ($Line -match "LOGON TIME") {continue}
                     
-                    $IdleTimeValue = $Line.SubString(54, 9).Trim().Replace('+', '.')
-            
-                    If ($IdleTimeValue -eq 'none') {$Idle = $null}
-                    
-                    else {$Idle = [timespan]$IdleTimeValue}
-                    
                     [PSCustomObject]@{
             
                         UserName =  $Line.SubString(1, 20).Trim()
-                        SessionName = $Line.SubString(23, 17).Trim()
-                        ID = $Line.SubString(42, 2).Trim()
                         State = $Line.SubString(46, 6).Trim()
-                        IdleTime = $Idle
                         LogonTime = [datetime]$Line.SubString(65)
                     }
                 }
