@@ -3,14 +3,14 @@
     Select user(s) to log off on a remote computer.
 
     Author: Matthew D. Daugherty
-    Date Modified: 17 June 2020
+    Date Modified: 21 June 2020
 #>
 
 do {
 
     Clear-Host
 
-    $ComputerName = Read-Host "`nEnter computer name"
+    $ComputerName = Read-Host "Enter computer name"
     
 } until ($ComputerName)
 
@@ -30,19 +30,11 @@ function Convert-Quser {
 
         if ($Line -match "LOGON TIME") {continue}
         
-        $IdleTimeValue = $Line.SubString(54, 9).Trim().Replace('+', '.')
-
-        If ($IdleTimeValue -eq 'none') {$Idle = $null}
-        
-        else {$Idle = [timespan]$IdleTimeValue}
-        
         [PSCustomObject]@{
 
             UserName =  $Line.SubString(1, 20).Trim()
-            SessionName = $Line.SubString(23, 17).Trim()
             ID = $Line.SubString(42, 2).Trim()
             State = $Line.SubString(46, 6).Trim()
-            IdleTime = $Idle
             LogonTime = [datetime]$Line.SubString(65)
         }
     }
@@ -87,7 +79,7 @@ if (Test-Connection -ComputerName $ComputerName -Count 1 -Quiet) {
 
         Remove-PSSession -Session $Session
     }
-    catch {Write-Warning "Failed to establish PowerShell session on $ComputerName"}
+    catch {Write-Warning "Failed to establish PowerShell session on $ComputerName with the following error: $($_.FullyQualifiedErrorID)."}
     
 } # end if (Test-Connection)
-else {Write-Warning "Test-Connection returned false on $ComputerName"}
+else {Write-Warning "Test-Connection on $ComputerName returned false."}
