@@ -156,6 +156,8 @@ begin {
         $Result
 
     } # end $InvokeCommandScriptBlock
+
+    $Counter = 0
 }
 
 process {
@@ -163,6 +165,18 @@ process {
     foreach ($Computer in $ComputerName) {
 
         $Computer = $Computer.ToUpper()
+
+        $Counter++
+
+        $WriteProgressParams = @{
+
+            Activity = 'Copying driver(s)'
+            Status = "Computer $Counter of $($ComputerName.Count)"
+            CurrentOperation = "$Computer"
+            PercentComplete = (($Counter / $ComputerName.Count) * 100)
+        }
+
+        Write-Progress @WriteProgressParams
 
         foreach ($Driver in $DriverToInstall) {
 
@@ -179,8 +193,6 @@ process {
                 }
 
                 Copy-Item @CopyItemParams
-
-                Write-Verbose "Driver ($Driver) copied to $Computer" -Verbose
             }
             # Copy driver through session if C$ is not accessible
             catch {
@@ -200,8 +212,6 @@ process {
 
                     Copy-Item @CopyItemParams
 
-                    Write-Verbose "Driver ($Driver) copied to $Computer" -Verbose
-
                     Remove-PSSession -Session $Session
                 }
             }
@@ -210,7 +220,7 @@ process {
 
     } # end (foreach $Computer in $ComputerName)
 
-    Clear-Host
+    Write-Progress -Activity 'Copying driver(s)' -Completed
 
     switch ($InvokeParallel.IsPresent) {
 
