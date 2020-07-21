@@ -34,7 +34,7 @@ Get-Content .\computers.txt | .\Get-FileVersion -FilePath 'C:\Program Files (x86
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 21 July 2020
 
 #>
 
@@ -127,6 +127,7 @@ process {
                     FileExists = $null
                     FileVersion = $null
                     LastWriteTime = $null
+                    Error = $null
                 }
 
                 if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
@@ -162,12 +163,12 @@ process {
 
                             ComputerName = $Computer
                             ScriptBlock = $InvokeCommandScriptBlock
-                            ErrorAction = 'SilentlyContinue'
+                            ErrorAction = 'Stop'
                         }
 
-                        $InvokeResult = Invoke-Command @InvokeCommandParams
+                        try {
 
-                        if ($InvokeResult) {
+                            $InvokeResult = Invoke-Command @InvokeCommandParams
 
                             $Result.FileName = $FileName
 
@@ -176,6 +177,10 @@ process {
                             $Result.FileVersion = $InvokeResult.FileVersion
 
                             $Result.LastWriteTime = $InvokeResult.LastWriteTime
+                        }
+                        catch {
+
+                            $Result.Error = $_.FullyQualifiedErrorId
                         }
                     }
 
