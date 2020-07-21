@@ -35,7 +35,7 @@ Get-Content C:\computers.txt | .\Find-UserProfile -UserName 'UserName'
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 21 July 2020
 
 #>
 
@@ -87,18 +87,15 @@ begin {
 
         $Result = [PSCustomObject]@{
 
-            Exists = $false
-            LastUseTime = $null
+            UserFound = $false
+            LastWriteTime = $null
         }
 
-        $UserProfile = Get-CimInstance Win32_UserProfile -Verbose:$false | 
-        Where-Object LocalPath -EQ "C:\Users\$Using:UserName" -ErrorAction SilentlyContinue
+        if (Test-Path -Path "C:\Users\$Using:UserName") {
 
-        if ($UserProfile) {
+            $Result.UserFound = $true
 
-            $Result.Exists = $true
-
-            $Result.LastUseTime = $UserProfile.LastUseTime
+            $Result.LastWriteTime = (Get-Item -Path "C:\Users\$Using:UserName").LastWriteTime
         }
 
         $Result
@@ -118,32 +115,59 @@ process {
 
                     ComputerName = $Computer.ToUpper()
                     TestConnection = $false
-                    InvokeStatus = $null
                     UserName = $null
-                    Exists = $null
-                    LastUseTime = $null
+                    UserFound = $null
+                    LastWriteTime = $null
+                    Error = $null
                 }
 
                 if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
 
                     $Result.TestConnection = $true
 
-                    try {
-                        
-                        $InvokeResult = Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
+                    if (Test-Path -Path "\\$Computer\C$") {
 
-                        $Result.InvokeStatus = 'Success'
+                        if (Test-Path -Path "\\$Computer\C$\Users\$UserName") {
 
-                        $Result.UserName = $UserName
+                            $Result.UserName = $UserName
 
-                        $Result.Exists = $InvokeResult.Exists
+                            $Result.UserFound = $true
 
-                        $Result.LastUseTime = $InvokeResult.LastUseTime
-                    }
-                    catch {
+                            $Result.LastWriteTime = (Get-Item -Path "\\$Computer\C$\Users\$UserName").LastWriteTime
+                        }
+                        else {
 
-                        $Result.InvokeStatus = $_.FullyQualifiedErrorId
-                    }
+                            $Result.UserName = $UserName
+
+                            $Result.UserFound = $false
+                        }
+
+                    } # end if (Test-Path -Path "\\$Computer\C$")
+                    else {
+
+                        try {
+
+                            $InvokeCommandParams = @{
+
+                                ComputerName = $Computer
+                                ScriptBlock = $InvokeCommandScriptBlock
+                                ErrorAction = 'Stop'
+                            }
+
+                            $InvokeResult = Invoke-Command @InvokeCommandParams
+
+                            $Result.UserName = $UserName
+
+                            $Result.UserFound = $InvokeResult.UserFound
+
+                            $Result.LastWriteTime = $InvokeResult.LastWriteTime
+                        }
+                        catch {
+
+                            $Result.Error = $_.FullyQualifiedErrorId
+                        }
+
+                    } # end else
 
                 } # end if (Test-Connection)
 
@@ -173,8 +197,8 @@ process {
                     ComputerName = $_.PSComputerName.ToUpper()
                     InvokeStatus = 'Success'
                     UserName = $UserName
-                    Exists = $_.Exists
-                    LastUseTime = $_.LastUseTime
+                    UserFound = $_.UserFound
+                    LastWriteTime = $_.LastWriteTime
                 }
             }
 
@@ -189,8 +213,8 @@ process {
                             ComputerName = $icmError.TargetObject.ToUpper()
                             InvokeStatus = $icmError.FullyQualifiedErrorId
                             UserName = $null
-                            Exists = $null
-                            LastUseTime = $null
+                            UserFound = $null
+                            LastWriteTime = $null
                         }
                     }
         
