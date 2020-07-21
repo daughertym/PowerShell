@@ -142,6 +142,8 @@ begin {
         $Result
 
     } # end $InvokeCommandScriptBlock
+
+    $Counter = 0
 }
 
 process {
@@ -149,6 +151,18 @@ process {
     foreach ($Computer in $ComputerName) {
 
         $Computer = $Computer.ToUpper()
+
+        $Counter++
+
+        $WriteProgressParams = @{
+
+            Activity = 'Copying SDC Application'
+            Status = "Computer $Counter of $($ComputerName.Count)"
+            CurrentOperation = "$Computer"
+            PercentComplete = (($Counter / $ComputerName.Count) * 100)
+        }
+
+        Write-Progress @WriteProgressParams
 
         # Try to copy driver through C$
         try {
@@ -163,8 +177,6 @@ process {
             }
 
             Copy-Item @CopyItemParams
-
-            Write-Verbose "SDC App ($AppToInstall) copied to $Computer" -Verbose
         }
          # Copy SDC App through session if C$ is not accessible
          catch {
@@ -184,15 +196,13 @@ process {
 
                 Copy-Item @CopyItemParams
 
-                Write-Verbose "SDC App ($SDCApp) copied to $Computer" -Verbose
-
                 Remove-PSSession -Session $Session
             }
         }
 
     } # end foreach ($Computer in $ComputerName)
 
-    Clear-Host
+    Write-Progress -Activity 'Copying SDC Application' -Completed
 
     switch ($InvokeParallel.IsPresent) {
 
