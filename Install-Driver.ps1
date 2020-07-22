@@ -10,6 +10,17 @@ Specifies the computer(s) to install driver(s) on.
 Specifies path to folder containing driver(s).
 Default is /Desktop/Drivers
 
+Create a folder on Desktop named Drivers.
+
+Inside Drivers folder create subfolders for your driver(s).
+
+    HP
+    Konica Minolta
+    Lexmark
+    Xerox
+
+Put driver files in their respective folders.
+
 .PARAMETER InvokeParallel
 Optional switch to Invoke-Command in parallel.
 
@@ -39,7 +50,7 @@ Get-Content C:\computers.txt | .\Install-Driver
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 20 July 2020
+Date Modified: 21 July 2020
 
 #>
 
