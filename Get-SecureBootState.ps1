@@ -41,7 +41,7 @@ Get-SecureBootState C:\computers.txt | .\Get-InstallDate
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 23 July 2020
 
 #>
 
@@ -95,7 +95,7 @@ begin {
 
         try {
 
-            switch (Confirm-SecureBootUEFI -ErrorAction Stop) {
+            switch (Confirm-SecureBootUEFI -Verbose:$false -ErrorAction Stop) {
 
                 'True' {$SecureBoot = 'Enabled'}
                 'False' {$SecureBoot = 'Disabled'}
@@ -112,10 +112,17 @@ begin {
 
         if ($Using:IncludePartitionStyle.IsPresent) {
 
+            $PartitionStyle = (Get-Disk -Verbose:$false).PartitionStyle
+
+            if ($PartitionStyle.Count -gt 1) {
+
+                $PartitionStyle = $PartitionStyle -join ','
+            }
+
             [PSCustomObject]@{
 
                 SecureBootState = $SecureBoot
-                PartitionStyle = (Get-Disk | Where-Object BootFromDisk).PartitionStyle
+                PartitionStyle = $PartitionStyle
             }
         }
         else {
