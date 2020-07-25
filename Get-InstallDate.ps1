@@ -65,7 +65,7 @@ $InvokeCommandScriptBlock = {
     }
     catch {
 
-        $Result.Error = $_.FullyQualifiedErrorId
+        $Result.Error = "$($_.CategoryInfo.Reason): $($_.CategoryInfo.TargetName)"
     }
 
     $Result
@@ -90,7 +90,7 @@ Invoke-Command @InvokeCommandParams | ForEach-Object {
 
         ComputerName = $_.PSComputerName.ToUpper()
         InstallDate = $_.InstallDate
-        Error = $null
+        Error = $_.Error
     }
 }
 
