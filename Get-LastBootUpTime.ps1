@@ -1,184 +1,110 @@
 <#
 
 .SYNOPSIS
-Get last boot up time on one or more computers.
+Get last boot up time from computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to get last boot up time from.
-
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
+Specifies the computers query.
 
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
 
 .EXAMPLE
-.\Get-LastBootUpTime (Get-Content C:\computers.txt)
+.\Get-LastBootUpTime -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-Get-Content C:\computers.txt | .\Get-LastBootUpTime
+.\Get-LastBootUpTime (Get-Content C:\computers.txt) -IncludeError
 
 .EXAMPLE
-.\Get-LastBootUpTime (Get-Content C:\computers.txt) -InvokeParallel
-
-.EXAMPLE
-.\Get-LastBootUpTime (Get-Content C:\computers.txt) -InvokeParallel -IncludeError
+.\Get-LastBootUpTime (Get-Content C:\computers.txt) -IncludeError -Verbose |
+Export-Csv LastBootUpTime.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Optional switch to Invoke-Command in parrallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
+# Scriptblock for Invoke-Command
+$InvokeCommandScriptBlock = {
 
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
+    $VerbosePreference = $Using:VerbosePreference
+    
+    Write-Verbose "Getting LastBootUpTime on $env:COMPUTERNAME"
 
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
+    $Result = [PSCustomObject]@{
+
+        LastBootUpTime = $null
+        Error = $null
     }
 
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
-
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
-    }
-
-    # Scriptblock for Invoke-Command
-    $InvokeCommandScriptBlock = {
-
-        $VerbosePreference = $Using:VerbosePreference
+    try {
         
-        Write-Verbose "Getting LastBootUpTime on $env:COMPUTERNAME"
+        $LastBootUpTime = (Get-CimInstance Win32_OperatingSystem -Verbose:$false -ErrorAction Stop).LastBootUpTime
 
-        try {
-            
-            $LastBootUpTime = (Get-CimInstance Win32_OperatingSystem -Verbose:$false -ErrorAction Stop).LastBootUpTime
-        }
-        catch {
+        $Result.LastBootUpTime = $LastBootUpTime
+    }
+    catch {
 
-            $LastBootUpTime = $_.FullyQualifiedErrorId
-        }
+        $LastBootUpTime.Error = $_.FullyQualifiedErrorId
+    }
 
-        [PSCustomObject]@{
-
-            LastBootUpTime = $LastBootUpTime
-        }
-
-    } # end $InvokeCommandScriptBlock
+    $Result
 }
 
-process {
+# Parameters for Invoke-Command
+$InvokeCommandParams = @{
 
-    switch ($InvokeParallel.IsPresent) {
+    ComputerName = $ComputerName
+    ScriptBlock = $InvokeCommandScriptBlock
+    ErrorAction = 'SilentlyContinue'
+}
 
-        'False' {
+if ($IncludeError.IsPresent) {
 
-            foreach ($Computer in $ComputerName) {
+    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+}
 
-                $Result = [PSCustomObject]@{
+Invoke-Command @InvokeCommandParams | ForEach-Object {
 
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    InvokeStatus = $null
-                    LastBootUpTime = $null
-                }
+    [PSCustomObject]@{
 
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
+        ComputerName = $_.PSComputerName.ToUpper()
+        LastBootUpTime = $_.LastBootUpTime
+        Error = $_.Error
+    }
+}
 
-                    $Result.TestConnection = $true
+if ($IncludeError.IsPresent) {
 
-                    try {
-                        
-                        $InvokeResult = Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
+    if ($icmErrors) {
 
-                        $Result.InvokeStatus = 'Success'
+        foreach ($icmError in $icmErrors) {
 
-                        $Result.LastBootUpTime = $InvokeResult.LastBootUpTime
-                    }
-                    catch {
+            [PSCustomObject]@{
 
-                        $Result.InvokeStatus = $_.FullyQualifiedErrorId
-                    }
-
-                } # end if (Test-Connection)
-
-                $Result
-
-            } # end foreach ($Computer in $ComputerName)
+                ComputerName = $icmError.TargetObject.ToUpper()
+                InvokeStatus = $icmError.FullyQualifiedErrorId
+                LastBootUpTime = $null
+            }
         }
-        'True' {
-
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
-
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
-
-                [PSCustomObject]@{
-            
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                    LastBootUpTime = $_.LastBootUpTime
-                }
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-            
-                    foreach ($icmError in $icmErrors) {
-            
-                        [PSCustomObject]@{
-            
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                            LastBootUpTime = $null
-                        }
-                    }
-            
-                } # end if ($icmErrors)
-            
-            } # end if ($PSBoundParameters)
-        }
-
-    } # end switch ($InvokeParallel.IsPresent)
-
-} # end process
-
-end {}
+    }
+}
