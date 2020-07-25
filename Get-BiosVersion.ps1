@@ -61,7 +61,7 @@ $InvokeCommandScriptBlock = {
 
     try {
         
-        $BIOS = Get-CimInstance -ClassName 'Win32_BIOS' -Verbose:$false -ErrorAction Stop
+        $BIOS = Get-CimInstance Win32_BIOS -Verbose:$false -ErrorAction Stop
 
         $Result.BiosVersion = $BIOS.Name
 
