@@ -1,82 +1,58 @@
 <#
 
 .SYNOPSIS
-Confirm if a certain hot fix is installed on one or more computers.
+Confirm if a certain hot fix is installed on computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to confirm hot fix on.
+Specifies the computers to query.
 
 .PARAMETER ID
 Specifies the hot fix ID to check for.
 
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
-
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None.
 
 .OUTPUTS
 System.Object
 
 .EXAMPLE
-.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309
+.\Confirm-HotFix -ComputerName PC01,PC02,PC03 -ID KB4559309
 
 .EXAMPLE
-Get-Content C:\computers.txt | .\Confirm-HotFix -ID KB4559309
+.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -IncludeError
 
 .EXAMPLE
-.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -InvokeParallel
-
-.EXAMPLE
-.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -InvokeParallel -IncludeError
+.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -Verbose |
+Export-Csv KB4559309.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Mandatory parameter for hot fix ID
     [Parameter(Mandatory)]
     [string]
     $ID,
 
-    # Optional switch to Invoke-Command in parrallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors with InvokeParallel
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
+$Pattern = 'KB\d{7}$'
 
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
-
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
-    }
-
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
-
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
-    }
+if ($ID -match $Pattern) {
 
     # Scriptblock for Invoke-Command
     $InvokeCommandScriptBlock = {
@@ -101,105 +77,53 @@ begin {
         }
 
         $Result
+    }
 
-    } # end $InvokeCommandScriptBlock
-}
+    # Parameters for Invoke-Command
+    $InvokeCommandParams = @{
 
-process {
+        ComputerName = $ComputerName
+        ScriptBlock = $InvokeCommandScriptBlock
+        ErrorAction = 'SilentlyContinue'
+    }
 
-    switch ($InvokeParallel.IsPresent) {
+    if ($IncludeError.IsPresent) {
 
-        'False' {
+        $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+    }
 
-            foreach ($Computer in $ComputerName) {
+    Invoke-Command @InvokeCommandParams | ForEach-Object {
 
-                $Result = [PSCustomObject]@{
+        [PSCustomObject]@{
 
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    InvokeStatus = $null
-                    HotFixID = $null
-                    Installed = $null
-                    InstalledOn = $null
-                }
-
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
-
-                    $Result.TestConnection = $true
-
-                    try {
-                        
-                        $InvokeResult = Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
-
-                        $Result.InvokeStatus = 'Success'
-
-                        $Result.HotFixID = $ID
-
-                        $Result.Installed = $InvokeResult.Installed
-
-                        $Result.InstalledOn = $InvokeResult.InstalledOn
-                    }
-                    catch {
-                        
-                        $Result.InvokeStatus = $_.FullyQualifiedErrorId
-                    }
-
-                } # end if (Test-Connection)
-
-                $Result
-
-            } # end foreach ($Computer in $ComputerName)
+            ComputerName = $_.PSComputerName.ToUpper()
+            HotFixId = $ID
+            Installed = $_.Installed
+            InstalledOn = $_.InstalledOn
+            Error = $null
         }
-        'True' {
+    }
 
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
+    if ($IncludeError.IsPresent) {
 
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
+        if ($icmErrors) {
 
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
+            foreach ($icmError in $icmErrors) {
 
                 [PSCustomObject]@{
-        
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                    HotFixId = $ID
-                    Installed = $_.Installed
-                    InstalledOn = $_.InstalledOn
+
+                    ComputerName = $icmError.TargetObject.ToUpper()
+                    HotFixId = $null
+                    Installed = $null
+                    InstalledOn = $null
+                    Error = $icmError.FullyQualifiedErrorId
                 }
             }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-        
-                    foreach ($icmError in $icmErrors) {
-        
-                        [PSCustomObject]@{
-        
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                            HotFixId = $null
-                            Installed = $null
-                            InstalledOn = $null
-                        }
-                    }
-        
-                } # end if ($icmErrors)
-        
-            } # end if ($IncludeError.IsPresent)
         }
-        
-    } # end switch ($InvokeParallel.IsPresent)
+    }
 
-} # end process
+} # end if ($ID -match $Pattern)
+else {
 
-end {}
+    Write-Warning "$ID is not a valid hotfix ID."
+}
