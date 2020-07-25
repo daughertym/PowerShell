@@ -13,7 +13,7 @@ Specifies the username to find.
 Optional switch to include errors.
 
 .INPUTS
-None.
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
