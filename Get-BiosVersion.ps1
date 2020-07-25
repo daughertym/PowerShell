@@ -75,8 +75,7 @@ $InvokeCommandScriptBlock = {
     }
 
     $Result
-
-} # end $InvokeCommandScriptBlock
+}
 
 # Parameters for Invoke-Command
 $InvokeCommandParams = @{
