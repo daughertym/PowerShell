@@ -13,7 +13,7 @@ Specifies the hot fix ID to check for.
 Optional switch to include errors.
 
 .INPUTS
-None.
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
