@@ -1,7 +1,7 @@
 <#
 
 .SYNOPSIS
-Get BIOS version on computers.
+Get BIOS version from computers.
 
 .PARAMETER ComputerName
 Specifies the computers to query.
@@ -71,7 +71,7 @@ $InvokeCommandScriptBlock = {
     }
     catch {
 
-        $Result.Error = $_.FullyQualifiedErrorId
+        $Result.Error = "$($_.CategoryInfo.Reason): $($_.CategoryInfo.TargetName)"
     }
 
     $Result
