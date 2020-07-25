@@ -1,184 +1,111 @@
 <#
 
 .SYNOPSIS
-Get OS install date on one or more computers.
+Get OS install date from computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to get OS install date on.
-
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
+Specifies the computers to query.
 
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
 
 .EXAMPLE
-.\Get-InstallDate (Get-Content C:\computers.txt)
+.\Get-InstallDate -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-Get-Content C:\computers.txt | .\Get-InstallDate
+.\Get-InstallDate (Get-Content C:\computers.txt) -IncludeError
 
 .EXAMPLE
-.\Get-InstallDate (Get-Content C:\computers.txt) -InvokeParallel
-
-.EXAMPLE
-.\Get-InstallDate (Get-Content C:\computers.txt) -InvokeParallel -IncludeError
+.\Get-InstallDate (Get-Content C:\computers.txt) -IncludeError -Verbose |
+Export-Csv InstallDate.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Optional switch to Invoke-Command in parrallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors with InvokeParallel
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
 
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
+# Scriptblock for Invoke-Command
+$InvokeCommandScriptBlock = {
 
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
+    $VerbosePreference = $Using:VerbosePreference
+
+    Write-Verbose "Getting OS install date on $env:COMPUTERNAME"
+
+    $Result = [PSCustomObject]@{
+
+        InstallDate = $null
+        Error = $null
     }
 
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
+    try {
+        
+        $InstallDate = (Get-CimInstance Win32_OperatingSystem -Verbose:$false -ErrorAction Stop).InstallDate
 
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
+        $Result.InstallDate = $InstallDate
+    }
+    catch {
+
+        $Result.Error = $_.FullyQualifiedErrorId
     }
 
-    # Scriptblock for Invoke-Command
-    $InvokeCommandScriptBlock = {
-
-        $VerbosePreference = $Using:VerbosePreference
-
-        Write-Verbose "Getting OS install date on $env:COMPUTERNAME"
-
-        try {
-            
-            $InstallDate = (Get-CimInstance Win32_OperatingSystem -Verbose:$false -ErrorAction Stop).InstallDate
-        }
-        catch {
-
-            $InstallDate = $_.FullyQualifiedErrorId
-        }
-
-        [PSCustomObject]@{
-
-            InstallDate = $InstallDate
-        }
-
-    } # end $InvokeCommandScriptBlock
+    $Result
 }
 
-process {
+# Parameters for Invoke-Command
+$InvokeCommandParams = @{
 
-    switch ($InvokeParallel.IsPresent) {
+    ComputerName = $ComputerName
+    ScriptBlock = $InvokeCommandScriptBlock
+    ErrorAction = 'SilentlyContinue'
+}
 
-        'False' {
+if ($IncludeError.IsPresent) {
 
-            foreach ($Computer in $ComputerName) {
+    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+}
 
-                $Result = [PSCustomObject]@{
+Invoke-Command @InvokeCommandParams | ForEach-Object {
 
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    InvokeStatus = $null
-                    InstallDate = $null
-                }
+    [PSCustomObject]@{
 
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
+        ComputerName = $_.PSComputerName.ToUpper()
+        InstallDate = $_.InstallDate
+        Error = $null
+    }
+}
 
-                    $Result.TestConnection = $true
+if ($IncludeError.IsPresent) {
 
-                    try {
-                        
-                        $InvokeResult = Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
+    if ($icmErrors) {
 
-                        $Result.InvokeStatus = 'Success'
+        foreach ($icmError in $icmErrors) {
 
-                        $Result.InstallDate = $InvokeResult.InstallDate
-                    }
-                    catch {
+            [PSCustomObject]@{
 
-                        $Result.InvokeStatus = $_.FullyQualifiedErrorId
-                    }
-
-                } # end if (Test-Connection)
-
-                $Result
-
-            } # end foreach ($Computer in $ComputerName)
+                ComputerName = $icmError.TargetObject.ToUpper()
+                InstallDate = $null
+                Error = $icmError.FullyQualifiedErrorId
+            }
         }
-        'True' {
-
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
-
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-    
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
-    
-                [PSCustomObject]@{
-        
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                    InstallDate = $_.InstallDate
-                }
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-        
-                    foreach ($icmError in $icmErrors) {
-        
-                        [PSCustomObject]@{
-        
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                            InstallDate = $null
-                        }
-                    }
-        
-                } # end if ($icmErrors)
-        
-            } # end if ($IncludeError.IsPresent)
-        }
-
-    } # end switch ($InvokeParallel.IsPresent)
-
-} # end process
-
-end {}
+    }
+}
