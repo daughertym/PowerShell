@@ -1,21 +1,18 @@
  <#
 .SYNOPSIS
-Get file version info from one or more computers.
+Get file version info on computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to get file version info on.
+Specifies the computers to query.
 
 .PARAMETER FilePath
 Specifies the file to query.
 
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
-
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
@@ -24,224 +21,105 @@ System.Object
 .\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
 
 .EXAMPLE
-Get-Content .\computers.txt | .\Get-FileVersion -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
+.\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' -IncludeError
 
 .EXAMPLE
-.\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' -InvokeParallel
-
-.EXAMPLE
-.\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' -InvokeParallel -IncludeError
+.\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' -Verbose -IncludeError |
+Export-Csv Chrome.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 21 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Mandatory parameter file path to query
     [Parameter(Mandatory)]
     [string]
     $FilePath,
 
-    # Optional switch to Invoke-Command in parrallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors with InvokeParallel
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
+$FileName = Split-Path -Path $FilePath -Leaf
+
+# Script block for Invoke-Command
+$InvokeCommandScriptBlock = {
+
+    $VerbosePreference = $Using:VerbosePreference
     
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
+    Write-Verbose "Querying $Using:FileName on $env:COMPUTERNAME"
 
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
+    $Result = [PSCustomObject]@{
+
+        FileExists = $false
+        FileVersion = $null
+        LastWriteTime = $null
     }
 
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
+    if (Test-Path -Path $Using:FilePath) {
 
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
+        $Result.FileExists = $true
+
+        $File = Get-Item -Path $Using:FilePath
+
+        $Result.FileVersion = $File.VersionInfo.FileVersionRaw
+
+        $Result.LastWriteTime = $File.LastWriteTime
     }
 
-    $FileName = Split-Path -Path $FilePath -Leaf
-
-    $FilePathSplit = Split-Path -Path $FilePath -NoQualifier
-
-    # Script block for Invoke-Command
-    $InvokeCommandScriptBlock = {
-
-        $VerbosePreference = $Using:VerbosePreference
-        
-        Write-Verbose "Querying $Using:FileName on $env:COMPUTERNAME"
-
-        $Result = [PSCustomObject]@{
-
-            FileExists = $false
-            FileVersion = $null
-            LastWriteTime = $null
-        }
-
-        if (Test-Path -Path $Using:FilePath) {
-
-            $Result.FileExists = $true
-
-            $File = Get-Item -Path $Using:FilePath
-
-            $Result.FileVersion = $File.VersionInfo.FileVersionRaw
-
-            $Result.LastWriteTime = $File.LastWriteTime
-        }
-
-        $Result
-
-    } # end $InvokeCommandScriptBlock
+    $Result
 }
 
-process {
+# Parameters for Invoke-Command
+$InvokeCommandParams = @{
 
-    switch ($InvokeParallel.IsPresent) {
+    ComputerName = $ComputerName
+    ScriptBlock = $InvokeCommandScriptBlock
+    ErrorAction = 'SilentlyContinue'
+}
 
-        'False' {
+if ($IncludeError.IsPresent) {
 
-            foreach ($Computer in $ComputerName) {
+    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+}
 
-                $Result = [PSCustomObject]@{
+Invoke-Command @InvokeCommandParams | ForEach-Object {
 
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    FileName = $null
-                    FileExists = $null
-                    FileVersion = $null
-                    LastWriteTime = $null
-                    Error = $null
-                }
+    [PSCustomObject]@{
 
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
+        ComputerName = $_.PSComputerName.ToUpper()
+        FileName = $FileName
+        FileExists = $_.FileExists
+        FileVersion = $_.FileVersion
+        LastWriteTime = $_.LastWriteTime
+        Error = $null
+    }
+}
 
-                    $Result.TestConnection = $true
+if ($IncludeError.IsPresent) {
 
-                    if (Test-Path -Path "\\$Computer\C$") {
+    if ($icmErrors) {
 
-                        if (Test-Path -Path "\\$Computer\C$\$FilePathSplit") {
+        foreach ($icmError in $icmErrors) {
 
-                            $Result.FileName = $FileName
+            [PSCustomObject]@{
 
-                            $Result.FileExists = $true
-
-                            $File = Get-Item -Path "\\$Computer\C$\$FilePathSplit"
-
-                            $Result.FileVersion = $File.VersionInfo.FileVersionRaw
-
-                            $Result.LastWriteTime = $File.LastWriteTime
-
-                        } # end if (Test-Path -Path "\\$Computer\C$\$FilePathSplit")
-                        else {
-
-                            $Result.FileName = $FileName
-
-                            $Result.FileExists = $false
-                        }
-
-                    } # end if (Test-Path -Path "\\$Computer\C$")
-                    else {
-
-                        $InvokeCommandParams = @{
-
-                            ComputerName = $Computer
-                            ScriptBlock = $InvokeCommandScriptBlock
-                            ErrorAction = 'Stop'
-                        }
-
-                        try {
-
-                            $InvokeResult = Invoke-Command @InvokeCommandParams
-
-                            $Result.FileName = $FileName
-
-                            $Result.FileExists = $InvokeResult.FileExists
-
-                            $Result.FileVersion = $InvokeResult.FileVersion
-
-                            $Result.LastWriteTime = $InvokeResult.LastWriteTime
-                        }
-                        catch {
-
-                            $Result.Error = $_.FullyQualifiedErrorId
-                        }
-                    }
-
-                } # end if (Test-Connection)
-
-                $Result
-
-            } # end foreach ($Computer in $ComputerName)
+                ComputerName = $icmError.TargetObject.ToUpper()
+                FileName = $null
+                FileExists = $null
+                FileVersion = $null
+                LastWriteTime = $null
+                Error = $icmError.FullyQualifiedErrorId
+            }
         }
-        'True' {
-
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
-
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
-
-                [PSCustomObject]@{
-        
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                    FileName = $FileName
-                    FileExists = $_.FileExists
-                    FileVersion = $_.FileVersion
-                    LastWriteTime = $_.LastWriteTime
-                }
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-        
-                    foreach ($icmError in $icmErrors) {
-            
-                        [PSCustomObject]@{
-            
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                            FileName = $null
-                            Exists = $null
-                            FileVersion = $null
-                            LastWriteTime = $null
-                        }
-                    }
-        
-                } # end if ($icmErrors)
-        
-            } # end if ($IncludeError.IsPresent)
-        }
-
-    } # end switch ($InvokeParallel.IsPresent)
-    
-} # end process
-
-end {}
+    }
+}
