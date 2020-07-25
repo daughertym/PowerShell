@@ -1,230 +1,117 @@
 <#
 
 .SYNOPSIS
-Find computer(s) that a specific username has logged on to.
+Find a user profile on computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to query.
+Specifies the computers to query.
 
 .PARAMETER UserName
 Specifies the username to find.
 
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
-
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None.
 
 .OUTPUTS
 System.Object
 
 .EXAMPLE
-.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'UserName'
+.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith'
 
 .EXAMPLE
-Get-Content C:\computers.txt | .\Find-UserProfile -UserName 'UserName'
+.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith' -IncludeError
 
 .EXAMPLE
-.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'UserName' -InvokeParallel
-
-.EXAMPLE
-.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'UserName' -InvokeParallel -IncludeError
+.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith' -Verbose |
+Export-Csv bob.smith.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 21 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Mandatory parameter for username to find
     [Parameter(Mandatory)]
     [string]
     $UserName,
 
-    # Optional switch to Invoke-Command in parallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors with InvokeParallel
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
+# Scriptblock for Invoke-Command
+$InvokeCommandScriptBlock = {
 
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
+    $VerbosePreference = $Using:VerbosePreference
+    
+    Write-Verbose "Checking for $Using:UserName on $env:COMPUTERNAME"
 
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
+    $Result = [PSCustomObject]@{
+
+        UserProfileFound = $false
+        LastWriteTime = $null
     }
 
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
+    if (Test-Path -Path "C:\Users\$Using:UserName") {
 
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
+        $Result.UserProfileFound = $true
+
+        $Result.LastWriteTime = (Get-Item -Path "C:\Users\$Using:UserName").LastWriteTime
     }
 
-    # Scriptblock for Invoke-Command
-    $InvokeCommandScriptBlock = {
-
-        $VerbosePreference = $Using:VerbosePreference
-        
-        Write-Verbose "Checking for $Using:UserName on $env:COMPUTERNAME"
-
-        $Result = [PSCustomObject]@{
-
-            UserFound = $false
-            LastWriteTime = $null
-        }
-
-        if (Test-Path -Path "C:\Users\$Using:UserName") {
-
-            $Result.UserFound = $true
-
-            $Result.LastWriteTime = (Get-Item -Path "C:\Users\$Using:UserName").LastWriteTime
-        }
-
-        $Result
-
-    } # end $InvokeCommandScriptBlock
+    $Result
 }
 
-process {
+# Parameters for Invoke-Command
+$InvokeCommandParams = @{
 
-    switch ($InvokeParallel.IsPresent) {
+    ComputerName = $ComputerName
+    ScriptBlock = $InvokeCommandScriptBlock
+    ErrorAction = 'SilentlyContinue'
+}
 
-        'False' {
+if ($IncludeError.IsPresent) {
 
-            foreach ($Computer in $ComputerName) {
+    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+}
 
-                $Result = [PSCustomObject]@{
+Invoke-Command @InvokeCommandParams | ForEach-Object {
 
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    UserName = $null
-                    UserFound = $null
-                    LastWriteTime = $null
-                    Error = $null
-                }
+    [PSCustomObject]@{
 
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
+        ComputerName = $_.PSComputerName.ToUpper()
+        UserName = $UserName
+        UserProfileFound = $_.UserProfileFound
+        LastWriteTime = $_.LastWriteTime
+        Error = $null
+    }
+}
 
-                    $Result.TestConnection = $true
+if ($IncludeError.IsPresent) {
 
-                    if (Test-Path -Path "\\$Computer\C$") {
+    if ($icmErrors) {
 
-                        if (Test-Path -Path "\\$Computer\C$\Users\$UserName") {
+        foreach ($icmError in $icmErrors) {
 
-                            $Result.UserName = $UserName
+            [PSCustomObject]@{
 
-                            $Result.UserFound = $true
-
-                            $Result.LastWriteTime = (Get-Item -Path "\\$Computer\C$\Users\$UserName").LastWriteTime
-                        }
-                        else {
-
-                            $Result.UserName = $UserName
-
-                            $Result.UserFound = $false
-                        }
-
-                    } # end if (Test-Path -Path "\\$Computer\C$")
-                    else {
-
-                        try {
-
-                            $InvokeCommandParams = @{
-
-                                ComputerName = $Computer
-                                ScriptBlock = $InvokeCommandScriptBlock
-                                ErrorAction = 'Stop'
-                            }
-
-                            $InvokeResult = Invoke-Command @InvokeCommandParams
-
-                            $Result.UserName = $UserName
-
-                            $Result.UserFound = $InvokeResult.UserFound
-
-                            $Result.LastWriteTime = $InvokeResult.LastWriteTime
-                        }
-                        catch {
-
-                            $Result.Error = $_.FullyQualifiedErrorId
-                        }
-
-                    } # end else
-
-                } # end if (Test-Connection)
-
-                $Result
-
-            } # end foreach ($Computer in $ComputerName) 
+                ComputerName = $icmError.TargetObject.ToUpper()
+                UserName = $null
+                UserProfileFound = $null
+                LastWriteTime = $null
+                Error = $icmError.FullyQualifiedErrorId
+            }
         }
-        'True' {
-
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
-
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
-
-                [PSCustomObject]@{
-        
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                    UserName = $UserName
-                    UserFound = $_.UserFound
-                    LastWriteTime = $_.LastWriteTime
-                }
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-        
-                    foreach ($icmError in $icmErrors) {
-            
-                        [PSCustomObject]@{
-            
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                            UserName = $null
-                            UserFound = $null
-                            LastWriteTime = $null
-                        }
-                    }
-        
-                } # end if ($icmErrors)
-        
-            } # end if ($PSBoundParameters)
-        }
-
-    } # end switch ($InvokeParallel.IsPresent)
-
-} # end process
-
-end {}
+    }
+}
