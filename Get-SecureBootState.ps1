@@ -1,47 +1,36 @@
 <#
 
 .SYNOPSIS
-Get Secure Boot state from one or more computers.
+Get Secure Boot state from computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to get Secure Boot state from.
+Specifies the computers to query.
 
 .PARAMETER IncludePartitionStyle
 Optional switch to include partition style.
 
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
-
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
 
 .EXAMPLE
-.\Get-SecureBootState (Get-Content C:\computers.txt)
+.\Get-SecureBootState -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
 .\Get-SecureBootState (Get-Content C:\computers.txt) -IncludePartitionStyle
 
 .EXAMPLE
-Get-SecureBootState C:\computers.txt | .\Get-InstallDate
-
-.EXAMPLE
-.\Get-SecureBootState (Get-Content C:\computers.txt) -InvokeParallel
-
-.EXAMPLE
-.\Get-SecureBootState (Get-Content C:\computers.txt) -InvokeParallel -IncludePartitionStyle
-
-.EXAMPLE
-.\Get-SecureBootState (Get-Content C:\computers.txt) -InvokeParallel -IncludeError
+.\Get-SecureBootState (Get-Content C:\computers.txt) -IncludeError -Verbose |
+Export-Csv SecureBoot.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 23 July 2020
+Date Modified: 25 July 2020
 
 #>
 
@@ -50,200 +39,135 @@ Date Modified: 23 July 2020
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Optional switch to Invoke-Command in parrallel
     [Parameter()]
     [switch]
     $IncludePartitionStyle,
 
-    # Optional switch to Invoke-Command in parrallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors with InvokeParallel
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
+# Scriptblock for Invoke-Command
+$InvokeCommandScriptBlock = {
 
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
+    $VerbosePreference = $Using:VerbosePreference
+    
+    Write-Verbose "Getting Secure Boot state on $env:COMPUTERNAME"
 
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
+    $Result = [PSCustomObject]@{
+
+        SecureBootState = $null
+        PartitionStyle = $null
+        Error = $null
     }
 
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
+    try {
 
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
+        switch (Confirm-SecureBootUEFI -Verbose:$false -ErrorAction Stop) {
+
+            'True' {$SecureBoot = 'Enabled'}
+            'False' {$SecureBoot = 'Disabled'}
+        }
+
+        $Result.SecureBootState = $SecureBoot
+    }
+    catch [System.PlatformNotSupportedException] {
+
+        $SecureBoot = 'Not Supported'
+    }
+    catch [System.UnauthorizedAccessException] {
+
+        $Result.Error = 'Confirm-SecureBootUEFI: Access denied'
     }
 
-    # Scriptblock for Invoke-Command
-    $InvokeCommandScriptBlock = {
-
-        $VerbosePreference = $Using:VerbosePreference
-        
-        Write-Verbose "Getting Secure Boot state on $env:COMPUTERNAME"
+    if ($Using:IncludePartitionStyle.IsPresent) {
 
         try {
 
-            switch (Confirm-SecureBootUEFI -Verbose:$false -ErrorAction Stop) {
-
-                'True' {$SecureBoot = 'Enabled'}
-                'False' {$SecureBoot = 'Disabled'}
-            }
-        }
-        catch [System.PlatformNotSupportedException] {
-
-            $SecureBoot = 'Not Supported'
-        }
-        catch [System.UnauthorizedAccessException] {
-
-            $SecureBoot = 'Access was denied'
-        }
-
-        if ($Using:IncludePartitionStyle.IsPresent) {
-
-            $PartitionStyle = (Get-Disk -Verbose:$false).PartitionStyle
+            $PartitionStyle = (Get-Disk -Verbose:$false -ErrorAction Stop).PartitionStyle
 
             if ($PartitionStyle.Count -gt 1) {
 
                 $PartitionStyle = $PartitionStyle -join ','
             }
 
-            [PSCustomObject]@{
-
-                SecureBootState = $SecureBoot
-                PartitionStyle = $PartitionStyle
-            }
+            $Result.PartitionStyle = $PartitionStyle
         }
-        else {
+        catch {
 
-            [PSCustomObject]@{
-
-                SecureBootState = $SecureBoot
-            }
+            $Result.Error = $_.FullyQualifiedErrorId
         }
+    }
 
-    } # end $InvokeCommandScriptBlock
+    $Result
+} 
+
+# Parameters for Invoke-Command
+$InvokeCommandParams = @{
+
+    ComputerName = $ComputerName
+    ScriptBlock = $InvokeCommandScriptBlock
+    ErrorAction = 'SilentlyContinue'
 }
 
-process {
+if ($IncludeError.IsPresent) {
 
-    switch ($InvokeParallel.IsPresent) {
+    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+}
 
-        'False' {
+Invoke-Command @InvokeCommandParams | ForEach-Object {
 
-            foreach ($Computer in $ComputerName) {
+    if ($IncludePartitionStyle.IsPresent) {
 
-                $Result = [PSCustomObject]@{
+        [PSCustomObject]@{
 
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    InvokeStatus = $null
+            ComputerName = $_.PSComputerName.ToUpper()
+            SecureBootState = $_.SecureBootState
+            PartitionStyle = $_.PartitionStyle
+            Error = $_.Error
+        }
+    }
+    else {
+
+        [PSCustomObject]@{
+
+            ComputerName = $_.PSComputerName.ToUpper()
+            SecureBootState = $_.SecureBootState
+            Error = $_.Error
+        }
+    }
+}
+
+if ($IncludeError.IsPresent) {
+
+    if ($icmErrors) {
+
+        foreach ($icmError in $icmErrors) {
+
+            if ($IncludePartitionStyle.IsPresent) {
+
+                [PSCustomObject]@{
+
+                    ComputerName = $icmError.TargetObject.ToUpper()
                     SecureBootState = $null
+                    PartitionStyle = $null
+                    Error = $icmError.FullyQualifiedErrorId
                 }
+            }
+            else {
 
-                if ($IncludePartitionStyle.IsPresent) {
+                [PSCustomObject]@{
 
-                    $Result | Add-Member -MemberType NoteProperty -Name PartitionStyle -Value $null
+                    ComputerName = $icmError.TargetObject.ToUpper()
+                    SecureBootState = $null
+                    Error = $icmError.FullyQualifiedErrorId
                 }
-
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
-
-                    $Result.TestConnection = $true
-
-                    try {
-
-                        $InvokeResult = Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
-
-                        $Result.InvokeStatus = 'Success'
-
-                        $Result.SecureBootState = $InvokeResult.SecureBootState
-
-                        if ($IncludePartitionStyle.IsPresent) {
-
-                            $Result.PartitionStyle = $InvokeResult.PartitionStyle
-                        }
-                    }
-                    catch {
-
-                        $Result.InvokeStatus = $_.FullyQualifiedErrorId
-                    }
-
-                } # end if (Test-Connection)
-
-                $Result
-
-            } # end foreach ($Computer in $ComputerName)
+            }
         }
-        'True' {
-
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
-
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
-    
-                $Result = [PSCustomObject]@{
-        
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                    SecureBootState = $_.SecureBootState
-                }
-
-                if ($IncludePartitionStyle.IsPresent) {
-
-                    $Result | Add-Member -MemberType NoteProperty -Name 'PartitionStyle' -Value $_.PartitionStyle
-                }
-
-                $Result
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-        
-                    foreach ($icmError in $icmErrors) {
-        
-                        $Result = [PSCustomObject]@{
-        
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                            SecureBootState = $null
-                        }
-
-                        if ($IncludePartitionStyle.IsPresent) {
-
-                            $Result | Add-Member -MemberType NoteProperty -Name 'PartitionStyle' -Value $null
-                        }
-        
-                        $Result
-                    }
-        
-                } # end if ($icmErrors)
-        
-            } # end if ($IncludeError.IsPresent)
-        }
-
-    } # end ($InvokeParallel.IsPresent)
+    }
 }
-
-end {}
