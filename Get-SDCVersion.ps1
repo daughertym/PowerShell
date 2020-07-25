@@ -1,189 +1,116 @@
 <#
 
 .SYNOPSIS
-Get SDC version of one or more USAF Standard Desktop Configuration computers.
+Get SDC version from USAF computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to get SDC version from.
-
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
+Specifies the computers to query.
 
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
 
 .EXAMPLE
-.\Get-SDCVersion (Get-Content C:\computers.txt)
+.\Get-SDCVersion -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-Get-SDCVersion C:\computers.txt | .\Get-InstallDate
+.\Get-SDCVersion (Get-Content C:\computers.txt) -IncludeError
 
 .EXAMPLE
-.\Get-SDCVersion (Get-Content C:\computers.txt) -InvokeParallel
-
-.EXAMPLE
-.\Get-SDCVersion (Get-Content C:\computers.txt) -InvokeParallel -IncludeError
+.\Get-SDCVersion (Get-Content C:\computers.txt) -IncludeError -Verbose |
+Export-Csv SDCVersion.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Optional switch to Invoke-Command in parrallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors with InvokeParallel
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
+# Scriptblock for Invoke-Command
+$InvokeCommandScriptBlock = {
 
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
+    $VerbosePreference = $Using:VerbosePreference
+    
+    Write-Verbose "Getting SDC version on $env:COMPUTERNAME"
 
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
+    $Result = [PSCustomObject]@{
+
+        SDCVersion = $null
+        Error = $null
     }
 
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
+    try {
 
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
+        $GetItemPropertyParams = @{
+
+            Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation'
+            ErrorAction = 'Stop'
+        }
+        
+        $SDCVersion = (Get-ItemProperty @GetItemPropertyParams).Model
+
+        $Result.SDCVersion = $SDCVersion
+    }
+    catch {
+
+        $Result.Error = $_.FullyQualifiedErrorId
     }
 
-    # Scriptblock for Invoke-Command
-    $InvokeCommandScriptBlock = {
+    $Result
+} 
 
-        $VerbosePreference = $Using:VerbosePreference
-        
-        Write-Verbose "Getting SDC version on $env:COMPUTERNAME"
+# Parameters for Invoke-Command
+$InvokeCommandParams = @{
 
-        try {
-
-            $GetItemPropertyParams = @{
-
-                Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation'
-                ErrorAction = 'Stop'
-            }
-            
-            $SDCVersion = (Get-ItemProperty @GetItemPropertyParams).Model
-        }
-        catch {
-
-            $SDCVersion = $_.FullyQualifiedErrorId
-        }
-
-        [PSCustomObject]@{
-
-            SDCVersion = $SDCVersion
-        }
-
-    } # end $InvokeCommandScriptBlock
+    ComputerName = $ComputerName
+    ScriptBlock = $InvokeCommandScriptBlock
+    ErrorAction = 'SilentlyContinue'
 }
 
-process {
+if ($IncludeError.IsPresent) {
 
-    switch ($InvokeParallel.IsPresent) {
-
-        'False' {
-
-            foreach ($Computer in $ComputerName) {
-
-                $Result = [PSCustomObject]@{
-        
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    InvokeStatus = $null
-                    SDCVersion = $null
-                }
-        
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
-        
-                    $Result.TestConnection = $true
-        
-                    try {
-        
-                        $InvokeResult = Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
-        
-                        $Result.InvokeStatus = 'Succcess'
-        
-                        $Result.SDCVersion = $InvokeResult.SDCVersion
-                    }
-                    catch {
-        
-                        $Result.InvokeStatus = $_.FullyQualifiedErrorId
-                    }
-        
-                } # end if (Test-Connection)
-        
-                $Result
-        
-            } # end foreach ($Computer in $ComputerName) 
-        }
-        'True' {
-
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
-
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
-
-                [PSCustomObject]@{
-            
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                    SDCVersion = $_.SDCVersion
-                }
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-            
-                    foreach ($icmError in $icmErrors) {
-            
-                        [PSCustomObject]@{
-            
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                            SDCVersion = $null
-                        }
-                    }
-            
-                } # end if ($icmErrors)
-            
-            } # end if ($IncludeError.IsPresent)
-        }
-
-    } # end switch ($InvokeParallel.IsPresent)
+    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
 }
 
-end {}
+Invoke-Command @InvokeCommandParams | ForEach-Object {
+
+    [PSCustomObject]@{
+
+        ComputerName = $_.PSComputerName.ToUpper()
+        SDCVersion = $_.SDCVersion
+        Error = $_.Error
+    }
+}
+
+if ($IncludeError.IsPresent) {
+
+    if ($icmErrors) {
+
+        foreach ($icmError in $icmErrors) {
+
+            [PSCustomObject]@{
+
+                ComputerName = $icmError.TargetObject.ToUpper()
+                SDCVersion = $null
+                Error = $icmError.FullyQualifiedErrorId
+            }
+        }
+    }
+}
