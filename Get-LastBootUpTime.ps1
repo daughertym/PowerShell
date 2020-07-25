@@ -64,7 +64,7 @@ $InvokeCommandScriptBlock = {
     }
     catch {
 
-        $LastBootUpTime.Error = $_.FullyQualifiedErrorId
+        $Result.Error = "$($_.CategoryInfo.Reason): $($_.CategoryInfo.TargetName)"
     }
 
     $Result
@@ -102,8 +102,8 @@ if ($IncludeError.IsPresent) {
             [PSCustomObject]@{
 
                 ComputerName = $icmError.TargetObject.ToUpper()
-                InvokeStatus = $icmError.FullyQualifiedErrorId
                 LastBootUpTime = $null
+                Error = $icmError.FullyQualifiedErrorId
             }
         }
     }
