@@ -4,10 +4,13 @@
 Test-Connection -AsJob on computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to Test-Connection on.
+Specifies the computers to Test-Connection on.
+
+If no computer names are passed to ComputerName parameter,
+computer names will be from Active Directory.
 
 .INPUTS
-None. You cannot pipe objects to Test-ConnectionAsJob
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
@@ -16,30 +19,45 @@ System.Object
 .\Test-Connection -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Test-Connection -ComputerName PC01,PC02,PC03 -IncludeUnreachable
+.\Test-Connection (Get-Content .\computers.txt) -IncludeUnreachable -Verbose |
+Export-Csv TestConnection.csv -NoTypeInformation
 
 .EXAMPLE
-.\Test-Connection (Get-Content C:\computers.txt)
+$Reachable = (.\Test-Connection).ComputerName
+
+.EXAMPLE
+.\Test-Connection | Select-Object -ExpandProperty ComputerName |
+Out-File Reachable.txt
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 param (
 
-# Parameter for one or more computer names
-[Parameter(Mandatory)]
+[Parameter()]
 [string[]]
 $ComputerName,
 
-# Optional switch to include unreachable computers
 [Parameter()]
 [switch]
 $IncludeUnreachable
 
 )
+
+if (-not($PSBoundParameters.ContainsKey('ComputerName'))) {
+
+    $SearchBases = @(
+
+    )
+
+    $ComputerName = $SearchBases | ForEach-Object {
+
+        (Get-ADComputer -SearchBase $_ -Filter *).Name
+    }
+}
 
 $Unreachable = New-Object System.Collections.ArrayList
 
