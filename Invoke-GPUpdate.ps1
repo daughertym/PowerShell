@@ -1,7 +1,7 @@
 <#
 
 .SYNOPSIS
-Invoke gpupdate /force on one or more computers.
+Invoke gpupdate /force on computer(s).
 
 .PARAMETER ComputerName
 Specifies the computer(s) to invoke gpupdate /force on.
@@ -10,55 +10,85 @@ Specifies the computer(s) to invoke gpupdate /force on.
 Optional switch to include errors.
 
 .INPUTS
-None.
+None. You cannot pipe objects.
 
 .OUTPUTS
-None.
+System.Object
 
 .EXAMPLE
 .\Invoke-GPUpdate -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Invoke-GPUpdate -ComputerName (Get-Content C:\computers.txt)
+.\Invoke-GPUpdate (Get-Content C:\computers.txt) -IncludeError
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 21 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
     [Parameter(Mandatory)]
     [string[]]
-    $ComputerName
+    $ComputerName,
+
+    [Parameter()]
+    [switch]
+    $IncludeError
 )
 
-begin {
+# Scriptblock for Invoke-Command
+$InvokeCommandScriptBlock = {
 
-    # Scriptblock for Invoke-Command
-    $InvokeCommandScriptBlock = {
-            
-        Write-Verbose "Invoking gpupdate /force on $env:COMPUTERNAME" -Verbose
+    $VerbosePreference = $Using:VerbosePreference
+        
+    Write-Verbose "Invoking gpupdate /force on $env:COMPUTERNAME"
 
-        gpupdate.exe /force /wait:0 | Out-Null
+    gpupdate.exe /force /wait:0 | Out-Null
 
-    } # end $InvokeCommandScriptBlock
-}
+    [PSCustomObject]@{
 
-process {
-
-    # Parameters for Invoke-Command
-    $InvokeCommandParams = @{
-
-        ComputerName = $ComputerName
-        ScriptBlock = $InvokeCommandScriptBlock
-        ErrorAction = 'SilentlyContinue'
+        Success = $true
     }
-
-    Invoke-Command @InvokeCommandParams
 }
 
-end {}
+# Parameters for Invoke-Command
+$InvokeCommandParams = @{
+
+    ComputerName = $ComputerName
+    ScriptBlock = $InvokeCommandScriptBlock
+    ErrorAction = 'SilentlyContinue'
+}
+
+if ($IncludeError.IsPresent) {
+
+    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+}
+
+Invoke-Command @InvokeCommandParams | ForEach-Object {
+
+    [PSCustomObject]@{
+
+        ComputerName = $_.PSComputerName.ToUpper()
+        Success = $_.Success
+        Error = $null
+    }
+}
+
+if ($IncludeError.IsPresent) {
+
+    if ($icmErrors) {
+
+        foreach ($icmError in $icmErrors) {
+
+            [PSCustomObject]@{
+
+                ComputerName = $icmError.TargetObject.ToUpper()
+                Success = $false
+                Error = $icmError.FullyQualifiedErrorId
+            }
+        }
+    }
+}
