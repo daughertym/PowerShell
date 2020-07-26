@@ -1,7 +1,7 @@
 <#
 
 .SYNOPSIS
-Install driver(s) on one or more computers.
+Install driver(s) on computer(s).
 
 .PARAMETER ComputerName
 Specifies the computer(s) to install driver(s) on.
@@ -21,14 +21,11 @@ Inside Drivers folder create subfolders for your driver(s).
 
 Put driver files in their respective folders.
 
-.PARAMETER InvokeParallel
-Optional switch to Invoke-Command in parallel.
-
 .PARAMETER IncludeError
-Optional switch to include errors with InvokeParallel.
+Optional switch to include errors.
 
 .INPUTS
-String
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
@@ -37,86 +34,49 @@ System.Object
 .\Install-Driver -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-Get-Content C:\computers.txt | .\Install-Driver
+.\Install-Driver (Get-Content C:\computers.txt) -IncludeError
 
 .EXAMPLE
-.\Install-Driver -ComputerName PC01,PC02,PC03 -InvokeParallel
-
-.EXAMPLE
-.\Install-Driver -ComputerName PC01,PC02,PC03 -InvokeParallel -IncludeError
-
-.EXAMPLE
-.\Install-Driver -ComputerName PC01,PC02,PC03 -Path C:\Drivers -InvokeParallel -IncludeError
+.\Install-Driver -ComputerName PC01,PC02,PC03 -Path C:\Drivers
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 21 July 2020
+Date Modified: 25 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for one or more computer names
-    [Parameter(Mandatory,ValueFromPipeline,ValueFromPipelineByPropertyName)]
+    [Parameter(Mandatory)]
     [string[]]
     $ComputerName,
 
-    # Parameter for path to folder containing driver(s)
     [Parameter()]
     [string]
     $Path = "$env:USERPROFILE\Desktop\Drivers",
 
-    # Optional switch to Invoke-Command in parrallel
-    [Parameter()]
-    [switch]
-    $InvokeParallel,
-
-    # Optional switch to include errors with InvokeParallel
     [Parameter()]
     [switch]
     $IncludeError
 )
 
-begin {
+if (-not(Test-Path -Path $Path)) {
 
-    # If DriverFolderPath parameter is used
-    if ($PSBoundParameters.ContainsKey('Path')) {
+    Write-Warning "Path: $Path does not exist."
+    break
+}
 
-        # Make sure $DriverFolderPath exists
-        if (-not(Test-Path -Path $Path)) {
+if (-not(Get-Item -Path $Path).PSIsContainer) {
 
-            Write-Warning "Path: $Path does not exist."
-            break
-        }
+    Write-Warning "Path: $Path is not a Directory."
+    break
+}
 
-        # Make sure $DriverFolderPath is a Directory
-        if (-not(Get-Item -Path $Path).PSIsContainer) {
+$DriverToInstall = (Get-ChildItem -Path $Path).Name | 
+Out-GridView -Title 'Select driver(s) to install' -OutputMode Multiple
 
-            Write-Warning "Path: $Path is not a Directory."
-            break
-        }
-    }
-
-    # Make sure InvokeParallel switch is not being used with piping input
-    if ($InvokeParallel.IsPresent -and $MyInvocation.ExpectingInput) {
-
-        Write-Warning 'Cannot accept pipeline input while using the InvokeParallel switch.'
-        break
-    }
-
-    # Make sure Invoke-Parallel switch is not being used with only one computer name
-    if ($ComputerName.Count -eq 1 -and $InvokeParallel.IsPresent) {
-
-        Write-Warning 'The InvokeParallel switch cannot be used with only one computer name.'
-        break
-    }
-
-    $DriverToInstall = (Get-ChildItem -Path $Path).Name | 
-    Out-GridView -Title 'Select driver(s) to install' -OutputMode Multiple
-
-    # If no driver(s) selected then break
-    if (-not($DriverToInstall)) {break}
+if ($DriverToInstall) {
 
     # Scriptblock for Invoke-Command
     $InvokeCommandScriptBlock = {
@@ -169,9 +129,6 @@ begin {
     } # end $InvokeCommandScriptBlock
 
     $Counter = 0
-}
-
-process {
 
     foreach ($Computer in $ComputerName) {
 
@@ -233,17 +190,45 @@ process {
 
     Write-Progress -Activity 'Copying driver(s)' -Completed
 
-    switch ($InvokeParallel.IsPresent) {
+    # Parameters for Invoke-Command
+    $InvokeCommandParams = @{
 
-        'False' {
+        ComputerName = $ComputerName
+        ScriptBlock = $InvokeCommandScriptBlock
+        ErrorAction = 'SilentlyContinue'
+    }
 
-            foreach ($Computer in $ComputerName) {
+    if ($IncludeError.IsPresent) {
 
+        $InvokeCommandParams.Add('ErrorVariable','icmErrors')
+    }
+
+    Invoke-Command @InvokeCommandParams | ForEach-Object {
+
+        $Result = [PSCustomObject]@{
+
+            ComputerName = $_.PSComputerName.ToUpper()
+        }
+
+        foreach ($Driver in $DriverToInstall) {
+
+            $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $_.$Driver
+        }
+
+        $Result | Add-Member -MemberType NoteProperty -Name 'Error' -Value $null
+
+        $Result
+    }
+
+    if ($IncludeError.IsPresent) {
+
+        if ($icmErrors) {
+
+            foreach ($icmError in $icmErrors) {
+    
                 $Result = [PSCustomObject]@{
-
-                    ComputerName = $Computer.ToUpper()
-                    TestConnection = $false
-                    InvokeStatus = $null
+    
+                    ComputerName = $icmError.TargetObject.ToUpper()
                 }
 
                 foreach ($Driver in $DriverToInstall) {
@@ -251,93 +236,10 @@ process {
                     $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $null
                 }
 
-                if (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
-
-                    $Result.TestConnection = $true
-
-                    try {
-                        
-                        $InvokeResult = Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
-
-                        $Result.InvokeStatus = 'Success'
-
-                        foreach ($Item in $InvokeResult) {
-
-                            foreach ($Driver in $DriverToInstall) {
-
-                                $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $Item.$Driver -Force
-                            }
-                        }
-                    }
-                    catch {
-
-                        $Result.InvokeStatus = $_.FullyQualifiedErrorId
-                    }
-
-                } # end if (Test-Connection)
+                $Result | Add-Member -MemberType NoteProperty -Name 'Error' -Value $icmError.FullyQualifiedErrorId
 
                 $Result
-
-            } # end foreach ($Computer in $Computers)
+            }
         }
-        'True' {
-
-            # Parameters for Invoke-Command
-            $InvokeCommandParams = @{
-
-                ComputerName = $ComputerName
-                ScriptBlock = $InvokeCommandScriptBlock
-                ErrorAction = 'SilentlyContinue'
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-            }
-
-            Invoke-Command @InvokeCommandParams | ForEach-Object {
-
-                $Result = [PSCustomObject]@{
-        
-                    ComputerName = $_.PSComputerName.ToUpper()
-                    InvokeStatus = 'Success'
-                }
-        
-                foreach ($Driver in $DriverToInstall) {
-        
-                    $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $_.$Driver
-                }
-        
-                $Result
-            }
-
-            if ($IncludeError.IsPresent) {
-
-                if ($icmErrors) {
-        
-                    foreach ($icmError in $icmErrors) {
-            
-                        $Result = [PSCustomObject]@{
-            
-                            ComputerName = $icmError.TargetObject.ToUpper()
-                            InvokeStatus = $icmError.FullyQualifiedErrorId
-                        }
-        
-                        foreach ($Driver in $DriverToInstall) {
-        
-                            $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $null
-                        }
-        
-                        $Result
-                    }
-        
-                } # end if ($icmErrors)
-        
-            } # end if ($IncludeError.IsPresent)
-        }
-
-    } # end switch ($InvokeParallel.IsPresent)
-
-} # end process
-
-end {}
+    }
+}
