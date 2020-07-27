@@ -48,7 +48,7 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
     
-    Write-Verbose "Getting local user info on $env:COMPUTERNAME"
+    Write-Verbose "Getting local user info on $env:COMPUTERNAME."
 
     $ResultsArray = @()
 
