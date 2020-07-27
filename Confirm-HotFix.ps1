@@ -10,7 +10,7 @@ Specifies the computers to query.
 Specifies the hot fix ID to check for.
 
 .PARAMETER IncludeError
-Optional switch to include errors.
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -22,15 +22,15 @@ System.Object
 .\Confirm-HotFix -ComputerName PC01,PC02,PC03 -ID KB4559309
 
 .EXAMPLE
-.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -IncludeError
+.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309
 
 .EXAMPLE
-.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -Verbose |
+.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -IncludeNonResponding -Verbose |
 Export-Csv KB4559309.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 26 July 2020
 
 #>
 
@@ -47,7 +47,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 $Pattern = 'KB\d{7}$'
@@ -59,10 +59,12 @@ if ($ID -match $Pattern) {
 
         $VerbosePreference = $Using:VerbosePreference
 
-        Write-Verbose "Checking $env:COMPUTERNAME for hotfix ID $Using:ID"
+        Write-Verbose "Checking $env:COMPUTERNAME for hotfix ID $Using:ID."
 
         $Result = [PSCustomObject]@{
 
+            ComputerName = $env:COMPUTERNAME
+            HotFixID = $Using:ID
             Installed = $false
             InstalledOn = $null
         }
@@ -87,43 +89,39 @@ if ($ID -match $Pattern) {
         ErrorAction = 'SilentlyContinue'
     }
 
-    if ($IncludeError.IsPresent) {
+    switch ($IncludeNonResponding.IsPresent) {
 
-        $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-    }
+        'True' {
 
-    Invoke-Command @InvokeCommandParams | ForEach-Object {
+            $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-        [PSCustomObject]@{
+            Invoke-Command @InvokeCommandParams | 
+            Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-            ComputerName = $_.PSComputerName.ToUpper()
-            HotFixId = $ID
-            Installed = $_.Installed
-            InstalledOn = $_.InstalledOn
-            Error = $null
-        }
-    }
+            if ($NonResponding) {
 
-    if ($IncludeError.IsPresent) {
-
-        if ($icmErrors) {
-
-            foreach ($icmError in $icmErrors) {
-
-                [PSCustomObject]@{
-
-                    ComputerName = $icmError.TargetObject.ToUpper()
-                    HotFixId = $null
-                    Installed = $null
-                    InstalledOn = $null
-                    Error = $icmError.FullyQualifiedErrorId
+                foreach ($Computer in $NonResponding) {
+    
+                    [PSCustomObject]@{
+    
+                        ComputerName = $Computer.TargetObject.ToUpper()
+                        HotFixID = $null
+                        Installed = $null
+                        InstalledOn = $null
+                        ErrorId = $Computer.FullyQualifiedErrorId
+                    }
                 }
             }
+        }
+        'False' {
+
+            Invoke-Command @InvokeCommandParams | 
+            Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
         }
     }
 
 } # end if ($ID -match $Pattern)
 else {
 
-    Write-Warning "$ID is not a valid hotfix ID."
+    Write-Warning "[-ID] $ID is not proper format. Must be KB followed by 7 digits. Ex: KB1234567"
 }
