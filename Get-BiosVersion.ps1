@@ -6,8 +6,8 @@ Get BIOS version from computers.
 .PARAMETER ComputerName
 Specifies the computers to query.
 
-.PARAMETER IncludeError
-Optional switch to include errors.
+.PARAMETER IncludeNonResonding
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -22,12 +22,12 @@ System.Object
 .\Get-BiosVersion (Get-Content C:\computers.txt)
 
 .EXAMPLE
-.\Get-BiosVersion (Get-Content C:\computers.txt) -Verbose -IncludeError |
+.\Get-BiosVersion (Get-Content C:\computers.txt) -Verbose -IncludeNonResponding |
 Export-Csv BiosVersion.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 26 July 2020
 
 #>
 
@@ -40,7 +40,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 
@@ -49,32 +49,17 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
 
-    Write-Verbose "Getting BIOS version on $env:COMPUTERNAME"
+    Write-Verbose "Getting BIOS version on $env:COMPUTERNAME."
 
-    $Result = [PSCustomObject]@{
+    $BIOS = Get-CimInstance -ClassName Win32_BIOS
 
-        BiosVersion = $null
-        Manufacturer = $null
-        SerialNumber = $null
-        Error = $null
+    [PSCustomObject]@{
+
+        ComputerName = $env:COMPUTERNAME
+        SerialNumber = $BIOS.SerialNumber
+        Manufacturer = $BIOS.Manufacturer
+        Version = $BIOS.Name
     }
-
-    try {
-        
-        $BIOS = Get-CimInstance Win32_BIOS -Verbose:$false -ErrorAction Stop
-
-        $Result.BiosVersion = $BIOS.Name
-
-        $Result.Manufacturer = $BIOS.Manufacturer
-
-        $Result.SerialNumber = $BIOS.SerialNumber
-    }
-    catch {
-
-        $Result.Error = "$($_.CategoryInfo.Reason): $($_.CategoryInfo.TargetName)"
-    }
-
-    $Result
 }
 
 # Parameters for Invoke-Command
@@ -85,37 +70,33 @@ $InvokeCommandParams = @{
     ErrorAction = 'SilentlyContinue'
 }
 
-if ($IncludeError.IsPresent) {
+switch ($IncludeNonResponding.IsPresent) {
 
-    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-}
-    
-Invoke-Command @InvokeCommandParams | ForEach-Object {
+    'True' {
 
-    [PSCustomObject]@{
+        $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-        ComputerName = $_.PSComputerName.ToUpper()
-        SerialNumber = $_.SerialNumber
-        Manufacturer = $_.Manufacturer
-        BiosVersion = $_.BiosVersion
-        Error = $_.Error
-    }
-}
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-if ($IncludeError.IsPresent) {
+        if ($NonResponding) {
 
-    if ($icmErrors) {
+            foreach ($Computer in $NonResponding) {
 
-        foreach ($icmError in $icmErrors) {
+                [PSCustomObject]@{
 
-            [PSCustomObject]@{
-
-                ComputerName = $icmError.TargetObject.ToUpper()
-                SerialNumber = $null
-                Manufacturer = $null
-                BiosVersion = $null
-                Error = $icmError.FullyQualifiedErrorId
+                    ComputerName = $Computer.TargetObject.ToUpper()
+                    SerialNumber = $null
+                    Manufacturer = $null
+                    Version = $null
+                    ErrorId = $Computer.FullyQualifiedErrorId
+                }
             }
         }
+    }
+    'False' {
+
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
     }
 }
