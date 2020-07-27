@@ -1,22 +1,33 @@
 <#
 
-    Select user(s) to log off on a remote computer.
+.SYNOPSIS
+Log off user(s) from remote computer.
 
-    Author: Matthew D. Daugherty
-    Date Modified: 21 June 2020
+.PARAMETER ComputerName
+Specifies the computer name to log off user(s) from.
+
+.INPUTS
+None. You cannot pipe objects.
+
+.OUTPUTS
+None.
+
+.EXAMPLE
+.\Invoke-LogOff -ComputerName PC01
+
+.NOTES
+Author: Matthew D. Daugherty
+Date Modified: 27 July 2020
+
 #>
 
-do {
+[CmdletBinding()]
+param (
 
-    Clear-Host
-
-    $ComputerName = Read-Host "Enter computer name"
-    
-} until ($ComputerName)
-
-$ComputerName = $ComputerName.ToUpper()
-
-Clear-Host
+    [Parameter(Mandatory)]
+    [string]
+    $ComputerName
+)
 
 function Convert-Quser {
 
@@ -24,62 +35,70 @@ function Convert-Quser {
 
     # Function to convert quser result into an object
 
-    $Quser = quser.exe
+    $Quser = quser.exe 2>$null
 
-    foreach ($Line in $Quser) {
+    if ($Quser) {
 
-        if ($Line -match "LOGON TIME") {continue}
-        
-        [PSCustomObject]@{
+        foreach ($Line in $Quser) {
 
-            UserName =  $Line.SubString(1, 20).Trim()
-            ID = $Line.SubString(42, 2).Trim()
-            State = $Line.SubString(46, 6).Trim()
-            LogonTime = [datetime]$Line.SubString(65)
+            if ($Line -match "LOGON TIME") {continue}
+            
+            [PSCustomObject]@{
+    
+                UserName =  $Line.SubString(1, 20).Trim()
+                ID = $Line.SubString(42, 2).Trim()
+                State = $Line.SubString(46, 6).Trim()
+                LogonTime = [datetime]$Line.SubString(65)
+            }
         }
     }
 }
 
-if (Test-Connection -ComputerName $ComputerName -Count 1 -Quiet) {
+try {
 
-    try {
+    $Session = New-PSSession -ComputerName $ComputerName -ErrorAction Stop
 
-        $Session = New-PSSession -ComputerName $ComputerName -ErrorAction Stop
+    $Quser = Invoke-Command -Session $Session -ScriptBlock ${Function:Convert-Quser}
 
-        $LogOff = Invoke-Command -Session $Session -ScriptBlock ${Function:Convert-Quser} | 
+    if ($Quser) {
+
+        $UserToLogOff = $Quser |
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId |
         Out-GridView -Title 'Select user(s) to log off' -OutputMode Multiple
-        
-        if ($LogOff) {
 
-            foreach ($UserName in $LogOff.UserName) {Out-Host -InputObject $UserName}
+        if ($UserToLogOff) {
 
+            foreach ($UserName in $UserToLogOff.UserName) {Write-Host $UserName -ForegroundColor Yellow}
+    
             $Title = 'Are you sure you want to log off the above user(s)?'
             $Prompt = $null
             $Choices = [System.Management.Automation.Host.ChoiceDescription[]] @('&Yes', '&No')
             $Default = 1
             $Choice = $host.UI.PromptForChoice($Title, $Prompt, $Choices, $Default)
-
-            # If Yes
-            if ($Choice -eq 0) {
-
-                Invoke-Command -Session $Session -ScriptBlock {
     
-                    foreach ($User in $Using:LogOff) {
+            if ($Choice -eq 0) {
+    
+                Invoke-Command -Session $Session -ScriptBlock {
+        
+                    foreach ($User in $Using:UserToLogOff) {
                         
-                        Write-Verbose "Logging off $($User.UserName)" -Verbose
-
+                        Write-Verbose "Logging off $($User.UserName)." -Verbose
+    
                         logoff.exe $User.ID
                     }
-
-                } # end Invoke-Command
-
-            } # end if ($Choice)
-
-        } # end if ($Logoff)
-
-        Remove-PSSession -Session $Session
-    }
-    catch {Write-Warning "Failed to establish PowerShell session on $ComputerName with the following error: $($_.FullyQualifiedErrorID)."}
     
-} # end if (Test-Connection)
-else {Write-Warning "Test-Connection on $ComputerName returned false."}
+                }
+            }
+    
+        } # end if ($UserToLogOff)
+
+    } # end if ($Quser)
+    else {
+
+        Write-Output "[$($ComputerName.ToUpper())] There is no user logged on."
+    }
+}
+catch {
+
+    Write-Warning "[$($ComputerName.ToUpper())] Failed to establish PowerShell session."
+}
