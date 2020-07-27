@@ -14,7 +14,7 @@ None.
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 27 July 2020
 
 #>
 
@@ -23,7 +23,6 @@ Date Modified: 25 July 2020
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for computer name
     [Parameter(Mandatory)]
     [string]
     $ComputerName
@@ -81,6 +80,8 @@ try {
                         }
                     }
                     Default {
+
+                        Write-Warning "$SettingName was not successfully set."
 
                         [PSCustomObject]@{
 
