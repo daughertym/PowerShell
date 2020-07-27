@@ -19,7 +19,7 @@ System.Object
 .\Get-InstallDate -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Get-InstallDate (Get-Content C:\computers.txt)
+.\Get-InstallDate (Get-Content C:\computers.txt) -ErrorAction SilentlyContinue
 
 .EXAMPLE
 .\Get-InstallDate (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
@@ -63,7 +63,7 @@ $InvokeCommandParams = @{
 
     ComputerName = $ComputerName
     ScriptBlock = $InvokeCommandScriptBlock
-    ErrorAction = 'SilentlyContinue'
+    ErrorAction = $ErrorActionPreference
 }
 
 switch ($IncludeNonResponding.IsPresent) {
