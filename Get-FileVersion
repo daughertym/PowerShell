@@ -1,6 +1,6 @@
  <#
 .SYNOPSIS
-Get file version info on computers.
+Get file version info from computers.
 
 .PARAMETER ComputerName
 Specifies the computers to query.
@@ -8,8 +8,8 @@ Specifies the computers to query.
 .PARAMETER FilePath
 Specifies the file to query.
 
-.PARAMETER IncludeError
-Optional switch to include errors.
+.PARAMETER IncludeNonResponding
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -18,18 +18,18 @@ None. You cannot pipe objects.
 System.Object
 
 .EXAMPLE
+.\Get-FileVersion -ComputerName PC01,PC02,PC03 -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
+
+.EXAMPLE
 .\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
 
 .EXAMPLE
-.\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' -IncludeError
-
-.EXAMPLE
-.\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' -Verbose -IncludeError |
+.\Get-FileVersion (Get-Content .\computers.txt) -FilePath 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe' -IncludeNonResponding -Verbose |
 Export-Csv Chrome.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 26 July 2020
 
 #>
 
@@ -46,7 +46,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 $FileName = Split-Path -Path $FilePath -Leaf
@@ -56,10 +56,12 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
     
-    Write-Verbose "Querying $Using:FileName on $env:COMPUTERNAME"
+    Write-Verbose "Querying $Using:FileName on $env:COMPUTERNAME."
 
     $Result = [PSCustomObject]@{
 
+        ComputerName = $env:COMPUTERNAME
+        FileName = $Using:FileName
         FileExists = $false
         FileVersion = $null
         LastWriteTime = $null
@@ -87,39 +89,34 @@ $InvokeCommandParams = @{
     ErrorAction = 'SilentlyContinue'
 }
 
-if ($IncludeError.IsPresent) {
+switch ($IncludeNonResponding.IsPresent) {
 
-    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-}
+    'True' {
 
-Invoke-Command @InvokeCommandParams | ForEach-Object {
+        $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-    [PSCustomObject]@{
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-        ComputerName = $_.PSComputerName.ToUpper()
-        FileName = $FileName
-        FileExists = $_.FileExists
-        FileVersion = $_.FileVersion
-        LastWriteTime = $_.LastWriteTime
-        Error = $null
-    }
-}
+        if ($NonResponding) {
 
-if ($IncludeError.IsPresent) {
+            foreach ($Computer in $NonResponding) {
 
-    if ($icmErrors) {
+                [PSCustomObject]@{
 
-        foreach ($icmError in $icmErrors) {
-
-            [PSCustomObject]@{
-
-                ComputerName = $icmError.TargetObject.ToUpper()
-                FileName = $null
-                FileExists = $null
-                FileVersion = $null
-                LastWriteTime = $null
-                Error = $icmError.FullyQualifiedErrorId
+                    ComputerName = $Computer.TargetObject.ToUpper()
+                    FileName = $null
+                    FileExists = $null
+                    FileVersion = $null
+                    LastWriteTime = $null
+                    ErrorId = $Computer.FullyQualifiedErrorId
+                }
             }
         }
+    }
+    'False' {
+
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
     }
 }
