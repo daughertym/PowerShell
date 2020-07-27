@@ -31,7 +31,7 @@ Out-File Reachable.txt
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 27 July 2020
 
 #>
 
@@ -49,8 +49,18 @@ $IncludeUnreachable
 
 if (-not($PSBoundParameters.ContainsKey('ComputerName'))) {
 
+    if (-not(Get-Module -ListAvailable -Name 'ActiveDirectory')) {
+
+        Write-Warning "Active Directory module is not installed."
+        break
+    } 
+
+    # Change this variable to your OUs
     $SearchBases = @(
 
+        'OU=Domain Users,OU=daugherty,DC=daugherty,DC=com'
+        'xxx'
+        'xxx'
     )
 
     $ComputerName = $SearchBases | ForEach-Object {
@@ -63,7 +73,7 @@ $Unreachable = New-Object System.Collections.ArrayList
 
 $ComputerName | ForEach-Object { 
 
-    Write-Verbose "Testing connection on $_"
+    Write-Verbose "Testing connection on $_."
 
     Test-Connection -ComputerName $_ -Count 1 -AsJob
 
