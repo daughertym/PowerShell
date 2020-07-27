@@ -22,7 +22,7 @@ System.Object
 .\Confirm-HotFix -ComputerName PC01,PC02,PC03 -ID KB4559309
 
 .EXAMPLE
-.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309
+.\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -ErrorAction SilentlyContinue
 
 .EXAMPLE
 .\Confirm-HotFix (Get-Content C:\computers.txt) -ID KB4559309 -IncludeNonResponding -Verbose |
