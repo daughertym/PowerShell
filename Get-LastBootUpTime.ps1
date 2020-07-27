@@ -19,7 +19,7 @@ System.Object
 .\Get-LastBootUpTime -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Get-LastBootUpTime (Get-Content C:\computers.txt)
+.\Get-LastBootUpTime (Get-Content C:\computers.txt) -ErrorAction SilentlyContinue
 
 .EXAMPLE
 .\Get-LastBootUpTime (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
@@ -27,7 +27,7 @@ Export-Csv LastBootUpTime.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 26 July 2020
+Date Modified: 27 July 2020
 
 #>
 
@@ -62,7 +62,7 @@ $InvokeCommandParams = @{
 
     ComputerName = $ComputerName
     ScriptBlock = $InvokeCommandScriptBlock
-    ErrorAction = 'SilentlyContinue'
+    ErrorAction = $ErrorActionPreference
 }
 
 switch ($IncludeNonResponding.IsPresent) {
