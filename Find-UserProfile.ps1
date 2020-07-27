@@ -1,7 +1,7 @@
 <#
 
 .SYNOPSIS
-Find a user profile on computers.
+Find computers with certain user in C:\Users
 
 .PARAMETER ComputerName
 Specifies the computers to query.
@@ -9,8 +9,8 @@ Specifies the computers to query.
 .PARAMETER UserName
 Specifies the username to find.
 
-.PARAMETER IncludeError
-Optional switch to include errors.
+.PARAMETER IncludeNonResponding
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -22,15 +22,12 @@ System.Object
 .\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith'
 
 .EXAMPLE
-.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith' -IncludeError
-
-.EXAMPLE
-.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith' -Verbose |
+.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith' -IncludeNonResponding -Verbose |
 Export-Csv bob.smith.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 26 July 2020
 
 #>
 
@@ -47,7 +44,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 # Scriptblock for Invoke-Command
@@ -55,17 +52,19 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
     
-    Write-Verbose "Checking for $Using:UserName on $env:COMPUTERNAME"
+    Write-Verbose "Checking for $Using:UserName on $env:COMPUTERNAME."
 
     $Result = [PSCustomObject]@{
 
-        UserProfileFound = $false
+        ComputerName = $env:COMPUTERNAME
+        UserName = $Using:UserName
+        Found = $false
         LastWriteTime = $null
     }
 
     if (Test-Path -Path "C:\Users\$Using:UserName") {
 
-        $Result.UserProfileFound = $true
+        $Result.Found = $true
 
         $Result.LastWriteTime = (Get-Item -Path "C:\Users\$Using:UserName").LastWriteTime
     }
@@ -81,37 +80,33 @@ $InvokeCommandParams = @{
     ErrorAction = 'SilentlyContinue'
 }
 
-if ($IncludeError.IsPresent) {
+switch ($IncludeNonResponding.IsPresent) {
 
-    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-}
+    'True' {
 
-Invoke-Command @InvokeCommandParams | ForEach-Object {
+        $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-    [PSCustomObject]@{
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-        ComputerName = $_.PSComputerName.ToUpper()
-        UserName = $UserName
-        UserProfileFound = $_.UserProfileFound
-        LastWriteTime = $_.LastWriteTime
-        Error = $null
-    }
-}
+        if ($NonResponding) {
 
-if ($IncludeError.IsPresent) {
+            foreach ($Computer in $NonResponding) {
 
-    if ($icmErrors) {
+                [PSCustomObject]@{
 
-        foreach ($icmError in $icmErrors) {
-
-            [PSCustomObject]@{
-
-                ComputerName = $icmError.TargetObject.ToUpper()
-                UserName = $null
-                UserProfileFound = $null
-                LastWriteTime = $null
-                Error = $icmError.FullyQualifiedErrorId
+                    ComputerName = $Computer.TargetObject.ToUpper()
+                    UserName = $null
+                    Found = $null
+                    LastWriteTime = $null
+                    ErrorId = $Computer.FullyQualifiedErrorId
+                }
             }
         }
+    }
+    'False' {
+
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
     }
 }
