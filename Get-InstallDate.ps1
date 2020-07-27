@@ -7,7 +7,7 @@ Get OS install date from computers.
 Specifies the computers to query.
 
 .PARAMETER IncludeError
-Optional switch to include errors.
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -19,15 +19,15 @@ System.Object
 .\Get-InstallDate -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Get-InstallDate (Get-Content C:\computers.txt) -IncludeError
+.\Get-InstallDate (Get-Content C:\computers.txt)
 
 .EXAMPLE
-.\Get-InstallDate (Get-Content C:\computers.txt) -IncludeError -Verbose |
+.\Get-InstallDate (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
 Export-Csv InstallDate.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 26 July 2020
 
 #>
 
@@ -40,7 +40,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 
@@ -49,26 +49,13 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
 
-    Write-Verbose "Getting OS install date on $env:COMPUTERNAME"
+    Write-Verbose "Getting OS install date on $env:COMPUTERNAME."
 
-    $Result = [PSCustomObject]@{
+    [PSCustomObject]@{
 
-        InstallDate = $null
-        Error = $null
+        ComputerName = $env:COMPUTERNAME
+        InstallDate = (Get-CimInstance Win32_OperatingSystem -Verbose:$false).InstallDate
     }
-
-    try {
-        
-        $InstallDate = (Get-CimInstance Win32_OperatingSystem -Verbose:$false -ErrorAction Stop).InstallDate
-
-        $Result.InstallDate = $InstallDate
-    }
-    catch {
-
-        $Result.Error = "$($_.CategoryInfo.Reason): $($_.CategoryInfo.TargetName)"
-    }
-
-    $Result
 }
 
 # Parameters for Invoke-Command
@@ -79,33 +66,31 @@ $InvokeCommandParams = @{
     ErrorAction = 'SilentlyContinue'
 }
 
-if ($IncludeError.IsPresent) {
+switch ($IncludeNonResponding.IsPresent) {
 
-    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-}
+    'True' {
 
-Invoke-Command @InvokeCommandParams | ForEach-Object {
+        $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-    [PSCustomObject]@{
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-        ComputerName = $_.PSComputerName.ToUpper()
-        InstallDate = $_.InstallDate
-        Error = $_.Error
-    }
-}
+        if ($NonResponding) {
 
-if ($IncludeError.IsPresent) {
+            foreach ($Computer in $NonResponding) {
 
-    if ($icmErrors) {
+                [PSCustomObject]@{
 
-        foreach ($icmError in $icmErrors) {
-
-            [PSCustomObject]@{
-
-                ComputerName = $icmError.TargetObject.ToUpper()
-                InstallDate = $null
-                Error = $icmError.FullyQualifiedErrorId
+                    ComputerName = $Computer.TargetObject.ToUpper()
+                    InstallDate = $null
+                    ErrorId = $Computer.FullyQualifiedErrorId
+                }
             }
         }
+    }
+    'False' {
+
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
     }
 }
