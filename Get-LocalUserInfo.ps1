@@ -19,7 +19,7 @@ System.Object
 .\Get-LocalUserInfo | Where-Object Enabled
 
 .EXAMPLE
-.\Get-LocalUserInfo -ComputerName PC01,PC02,PC03
+.\Get-LocalUserInfo -ComputerName PC01,PC02,PC03 -ErrorAction SilentlyContinue
 
 .EXAMPLE
 .\Get-LocalUserInfo (Get-Content .\computers.txt) -IncludeNonResponding -Verbose |
@@ -90,7 +90,7 @@ $InvokeCommandParams = @{
 
     ComputerName = $ComputerName
     ScriptBlock = $InvokeCommandScriptBlock
-    ErrorAction = 'SilentlyContinue'
+    ErrorAction = $ErrorActionPreference
 }
 
 switch ($IncludeNonResponding.IsPresent) {
