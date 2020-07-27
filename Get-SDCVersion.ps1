@@ -7,7 +7,7 @@ Get SDC version from USAF computers.
 Specifies the computers to query.
 
 .PARAMETER IncludeError
-Optional switch to include errors.
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -19,15 +19,15 @@ System.Object
 .\Get-SDCVersion -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Get-SDCVersion (Get-Content C:\computers.txt) -IncludeError
+.\Get-SDCVersion (Get-Content C:\computers.txt)
 
 .EXAMPLE
-.\Get-SDCVersion (Get-Content C:\computers.txt) -IncludeError -Verbose |
+.\Get-SDCVersion (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
 Export-Csv SDCVersion.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 26 July 2020
 
 #>
 
@@ -40,7 +40,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 # Scriptblock for Invoke-Command
@@ -48,32 +48,15 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
     
-    Write-Verbose "Getting SDC version on $env:COMPUTERNAME"
+    Write-Verbose "Getting SDC version on $env:COMPUTERNAME."
 
-    $Result = [PSCustomObject]@{
+    $Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation'
 
-        SDCVersion = $null
-        Error = $null
+    [PSCustomObject]@{
+
+        ComputerName = $env:COMPUTERNAME
+        SDCVersion = (Get-ItemProperty -Path $Path).Model
     }
-
-    try {
-
-        $GetItemPropertyParams = @{
-
-            Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OEMInformation'
-            ErrorAction = 'Stop'
-        }
-        
-        $SDCVersion = (Get-ItemProperty @GetItemPropertyParams).Model
-
-        $Result.SDCVersion = $SDCVersion
-    }
-    catch {
-
-        $Result.Error = "$($_.CategoryInfo.Reason): $($_.CategoryInfo.TargetName)"
-    }
-
-    $Result
 } 
 
 # Parameters for Invoke-Command
@@ -84,33 +67,31 @@ $InvokeCommandParams = @{
     ErrorAction = 'SilentlyContinue'
 }
 
-if ($IncludeError.IsPresent) {
+switch ($IncludeNonResponding.IsPresent) {
 
-    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-}
+    'True' {
 
-Invoke-Command @InvokeCommandParams | ForEach-Object {
+        $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-    [PSCustomObject]@{
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-        ComputerName = $_.PSComputerName.ToUpper()
-        SDCVersion = $_.SDCVersion
-        Error = $_.Error
-    }
-}
+        if ($NonResponding) {
 
-if ($IncludeError.IsPresent) {
+            foreach ($Computer in $NonResponding) {
 
-    if ($icmErrors) {
+                [PSCustomObject]@{
 
-        foreach ($icmError in $icmErrors) {
-
-            [PSCustomObject]@{
-
-                ComputerName = $icmError.TargetObject.ToUpper()
-                SDCVersion = $null
-                Error = $icmError.FullyQualifiedErrorId
+                    ComputerName = $Computer.TargetObject.ToUpper()
+                    SDCVersion = $null
+                    ErrorId = $Computer.FullyQualifiedErrorId
+                }
             }
         }
+    }
+    'False' {
+
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
     }
 }
