@@ -8,7 +8,7 @@ For example:
 Create a url shortcut for www.reddit.com on Public Desktop.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to create url shortcut on.
+Specifies the computers to create url shortcut on.
 
 .PARAMETER Name
 Specifies the name of the url shortcut.
@@ -19,7 +19,7 @@ Specifies the URL for the url shortcut.
 .PARAMETER Destination
 Specifies the destination for the url shortcut.
 
-.PARAMETER IncludeError
+.PARAMETER IncludeNonResponding
 Optional switch to include errors.
 
 .INPUTS
@@ -32,14 +32,14 @@ System.Object
 New-URLShortcut -ComputerName PC01,PC02,PC03 -Name Reddit -URL www.reddit.com -Destination C:\Users\Public\Desktop
 
 .EXAMPLE
-New-URLShortcut (Get-Content C:\computers.txt) -Name Reddit -URL www.reddit.com -Destination C:\Users\Public\Desktop
+New-URLShortcut (Get-Content C:\computers.txt) -Name Reddit -URL www.reddit.com -Destination C:\Users\Public\Desktop -ErrorAction SilentlyContinue 
 
 .EXAMPLE
-New-URLShortcut -ComputerName PC01,PC02,PC03 -Name Reddit -URL www.reddit.com -Destination C:\Users\Public\Desktop -IncludeError
+New-URLShortcut -ComputerName PC01,PC02,PC03 -Name Reddit -URL www.reddit.com -Destination C:\Users\Public\Desktop -IncludeNonResponding
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 27 July 2020
 
 #>
 
@@ -65,7 +65,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 
@@ -74,7 +74,7 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
     
-    Write-Verbose "Creating $Using:URL shortcut on $env:COMPUTERNAME"
+    Write-Verbose "Creating $Using:URL shortcut on $env:COMPUTERNAME."
 
     $URLShortcutFile = "$($Using:Destination)\$($Using:Name).url"
 
@@ -88,6 +88,9 @@ $InvokeCommandScriptBlock = {
 
     $Result = [PSCustomObject]@{
 
+        ComputerName = $env:COMPUTERNAME
+        Name = $Using:Name
+        URL = $Using:URL
         ShortcutCreated = $false
     }
 
@@ -106,40 +109,36 @@ $InvokeCommandParams = @{
 
     ComputerName = $ComputerName
     ScriptBlock = $InvokeCommandScriptBlock
-    ErrorAction = 'SilentlyContinue'
+    ErrorAction = $ErrorActionPreference
 }
 
-if ($IncludeError.IsPresent) {
+switch ($IncludeNonResponding.IsPresent) {
 
-    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-}
+    'True' {
 
-Invoke-Command @InvokeCommandParams | ForEach-Object {
+        $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-    [PSCustomObject]@{
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-        ComputerName = $_.PSComputerName.ToUpper()
-        Name = $Name
-        URL = $URL
-        ShortcutCreated = $_.ShortcutCreated
-        Error = $null
-    }
-}
+        if ($NonResponding) {
 
-if ($IncludeError.IsPresent) {
+            foreach ($Computer in $NonResponding) {
 
-    if ($icmErrors) {
+                [PSCustomObject]@{
 
-        foreach ($icmError in $icmErrors) {
-
-            [PSCustomObject]@{
-
-                ComputerName = $icmError.TargetObject.ToUpper()
-                Name = $null
-                URL = $null
-                ShortcutCreated = $null
-                Error = $icmError.FullyQualifiedErrorId
+                    ComputerName = $Computer.TargetObject.ToUpper()
+                    Name = $null
+                    URL = $null
+                    ShortcutCreated = $null
+                    ErrorId = $Computer.FullyQualifiedErrorId
+                }
             }
         }
+    }
+    'False' {
+
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
     }
 }
