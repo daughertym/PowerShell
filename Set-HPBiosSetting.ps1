@@ -34,7 +34,7 @@ try {
 
     $BiosSettings = Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock {
 
-        Get-WmiObject -Namespace 'root\HP\InstrumentedBIOS' -Class 'HP_BiosSettingInterface'
+        Get-WmiObject -Namespace root\HP\InstrumentedBIOS -Class HP_BiosEnumeration
     }
 
     $SettingBios = $true
@@ -62,7 +62,7 @@ try {
 
                     $BiosPassword = 'password'
                     $BiosPassword_UTF = "<utf-16/>$BiosPassword"
-                    $Bios = Get-WmiObject -Namespace 'root\HP\InstrumentedBIOS' -Class 'HP_BiosSettingInterface'
+                    $Bios = Get-WmiObject -Namespace root\HP\InstrumentedBIOS -Class HP_BiosSettingInterface
                     $Bios.SetBiosSetting($Using:SettingName,$Using:NewValue,$BiosPassword_UTF)
                 }
 
@@ -119,18 +119,27 @@ try {
         quser.exe 2>$null
     }
 
-    Remove-PSSession -Session $Session
-
     if ($null -eq $Quser) {
 
-        Restart-Computer -ComputerName $ComputerName -Force
+        Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock {
 
-        Write-Output "No user was logged on. $($ComputerName.ToUpper()) was restarted for setting(s) to take effect."
+            Restart-Computer -Force
+        }
+
+        $WriteHostParams = @{
+
+            Object = "No user was logged on. $($ComputerName.ToUpper()) was restarted for setting(s) to take effect."
+            ForegroundColor = 'Yellow'
+        }
+
+        Write-Host @WriteHostParams
     }
     else {
 
-        Write-Output "A restart is required for setting(s) to take effect."
+        Write-Host "A restart is required for setting(s) to take effect." -ForegroundColor Yellow
     }
+
+    Remove-Session -Session $Session
 }
 catch [System.Management.Automation.RemoteException] {
 
