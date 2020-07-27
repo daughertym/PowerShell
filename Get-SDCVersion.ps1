@@ -19,7 +19,7 @@ System.Object
 .\Get-SDCVersion -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Get-SDCVersion (Get-Content C:\computers.txt)
+.\Get-SDCVersion (Get-Content C:\computers.txt) -ErrorAction SilentlyContinue
 
 .EXAMPLE
 .\Get-SDCVersion (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
@@ -64,7 +64,7 @@ $InvokeCommandParams = @{
 
     ComputerName = $ComputerName
     ScriptBlock = $InvokeCommandScriptBlock
-    ErrorAction = 'SilentlyContinue'
+    ErrorAction = $ErrorActionPreference
 }
 
 switch ($IncludeNonResponding.IsPresent) {
