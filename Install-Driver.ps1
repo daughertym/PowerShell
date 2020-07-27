@@ -1,10 +1,10 @@
 <#
 
 .SYNOPSIS
-Install driver(s) on computer(s).
+Install driver(s) on computers.
 
 .PARAMETER ComputerName
-Specifies the computer(s) to install driver(s) on.
+Specifies the computer(s) to install drivers on.
 
 .PARAMETER Path
 Specifies path to folder containing driver(s).
@@ -34,14 +34,14 @@ System.Object
 .\Install-Driver -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Install-Driver (Get-Content C:\computers.txt) -IncludeError
+.\Install-Driver -ComputerName PC01,PC02,PC03 -Path C:\Drivers
 
 .EXAMPLE
-.\Install-Driver -ComputerName PC01,PC02,PC03 -Path C:\Drivers
+.\Install-Driver (Get-Content C:\computers.txt) -IncludeNonResponding -ErrorAction SilentlyContinue
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 27 July 2020
 
 #>
 
@@ -58,7 +58,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 if (-not(Test-Path -Path $Path)) {
@@ -83,13 +83,16 @@ if ($DriverToInstall) {
 
         $VerbosePreference = $Using:VerbosePreference
         
-        Write-Verbose "Installing driver(s) on $env:COMPUTERNAME"
+        Write-Verbose "Installing driver(s) on $env:COMPUTERNAME."
 
-        $Result = New-Object -TypeName psobject
+        $Result = [PSCustomObject]@{
+
+            ComputerName = $env:COMPUTERNAME
+        }
 
         foreach ($Driver in $Using:DriverToInstall) {
 
-            $Result | Add-Member -NotePropertyName $Driver -NotePropertyValue $null
+            $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $null
 
             if (Test-Path -Path "C:\Windows\Temp\$Driver") {
 
@@ -195,51 +198,43 @@ if ($DriverToInstall) {
 
         ComputerName = $ComputerName
         ScriptBlock = $InvokeCommandScriptBlock
-        ErrorAction = 'SilentlyContinue'
+        ErrorAction = $ErrorActionPreference
     }
 
-    if ($IncludeError.IsPresent) {
+    switch ($IncludeNonResponding.IsPresent) {
 
-        $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-    }
+        'True' {
 
-    Invoke-Command @InvokeCommandParams | ForEach-Object {
+            $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-        $Result = [PSCustomObject]@{
+            Invoke-Command @InvokeCommandParams | 
+            Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-            ComputerName = $_.PSComputerName.ToUpper()
-        }
+            if ($NonResponding) {
 
-        foreach ($Driver in $DriverToInstall) {
-
-            $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $_.$Driver
-        }
-
-        $Result | Add-Member -MemberType NoteProperty -Name 'Error' -Value $null
-
-        $Result
-    }
-
-    if ($IncludeError.IsPresent) {
-
-        if ($icmErrors) {
-
-            foreach ($icmError in $icmErrors) {
+                foreach ($Computer in $NonResponding) {
     
-                $Result = [PSCustomObject]@{
+                    $Result = [PSCustomObject]@{
     
-                    ComputerName = $icmError.TargetObject.ToUpper()
+                        ComputerName = $Computer.TargetObject.ToUpper()
+                    }
+
+                    foreach ($Driver in $DriverToInstall) {
+
+                        $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $null
+                    }
+    
+                    $Result | Add-Member -MemberType NoteProperty -Name 'ErrorID' -Value $Computer.FullyQualifiedErrorId
+    
+                    $Result
                 }
-
-                foreach ($Driver in $DriverToInstall) {
-
-                    $Result | Add-Member -MemberType NoteProperty -Name $Driver -Value $null
-                }
-
-                $Result | Add-Member -MemberType NoteProperty -Name 'Error' -Value $icmError.FullyQualifiedErrorId
-
-                $Result
             }
         }
+        'False' {
+
+            Invoke-Command @InvokeCommandParams | 
+            Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
+        }
     }
-}
+
+} # end if ($DriverToInstall)
