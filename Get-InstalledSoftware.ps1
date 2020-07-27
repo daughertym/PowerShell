@@ -11,7 +11,7 @@ Specifies the software to filter.
 
 Supports wildcard *
 
--Filter Adobe would return any software that is like the name Adobe.
+-Filter Adobe would return any software that is like the name Adobe
 
 .PARAMETER Name
 Specifies the name of the software.
@@ -54,9 +54,9 @@ Date Modified: 27 July 2020
 [CmdletBinding(DefaultParameterSetName = 'Filter')]
 param (
 
-    [Parameter()]
+    [Parameter(Mandatory)]
     [string[]]
-    $ComputerName = $env:COMPUTERNAME,
+    $ComputerName,
 
     [Parameter(ParameterSetName = 'Filter')]
     [string]
@@ -159,6 +159,7 @@ switch ($IncludeNonResponding.IsPresent) {
                 [PSCustomObject]@{
 
                     ComputerName = $Computer.TargetObject.ToUpper()
+                    Query = $null
                     DisplayName = $null
                     Publisher = $null
                     DisplayVersion = $null
