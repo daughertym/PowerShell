@@ -61,12 +61,6 @@ param (
    $IncludeNonResponding
 )
 
-if (-not($PSBoundParameters.ContainsKey('Webcam') -and -not($PSBoundParameters.ContainsKey('Microphone')))) {
-
-    Write-Warning "Parameter [Webcam] or parameter [Microphone] is required."
-    break
-}
-
 # ScriptBlock for Invoke-Command
 $InvokeCommandScriptBlock = {
 
