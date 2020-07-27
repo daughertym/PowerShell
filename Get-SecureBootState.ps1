@@ -19,7 +19,7 @@ System.Object
 .\Get-SecureBootState -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Get-SecureBootState (Get-Content C:\computers.txt)
+.\Get-SecureBootState (Get-Content C:\computers.txt) -ErrorAction SilentlyContinue
 
 .EXAMPLE
 .\Get-SecureBootState (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
@@ -27,7 +27,7 @@ Export-Csv SecureBoot.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 26 July 2020
+Date Modified: 27 July 2020
 
 #>
 
@@ -81,7 +81,7 @@ $InvokeCommandParams = @{
 
     ComputerName = $ComputerName
     ScriptBlock = $InvokeCommandScriptBlock
-    ErrorAction = 'SilentlyContinue'
+    ErrorAction = $ErrorActionPreference
 }
 
 switch ($IncludeNonResponding.IsPresent) {
