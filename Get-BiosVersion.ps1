@@ -51,7 +51,7 @@ $InvokeCommandScriptBlock = {
 
     Write-Verbose "Getting BIOS version on $env:COMPUTERNAME."
 
-    $BIOS = Get-CimInstance -ClassName Win32_BIOS
+    $BIOS = Get-CimInstance -ClassName Win32_BIOS -Verbose:$false
 
     [PSCustomObject]@{
 
