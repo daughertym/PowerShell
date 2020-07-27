@@ -6,11 +6,8 @@ Get Secure Boot state from computers.
 .PARAMETER ComputerName
 Specifies the computers to query.
 
-.PARAMETER IncludePartitionStyle
-Optional switch to include partition style.
-
 .PARAMETER IncludeError
-Optional switch to include errors.
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -22,15 +19,15 @@ System.Object
 .\Get-SecureBootState -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
-.\Get-SecureBootState (Get-Content C:\computers.txt) -IncludePartitionStyle
+.\Get-SecureBootState (Get-Content C:\computers.txt)
 
 .EXAMPLE
-.\Get-SecureBootState (Get-Content C:\computers.txt) -IncludeError -Verbose |
+.\Get-SecureBootState (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
 Export-Csv SecureBoot.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 25 July 2020
+Date Modified: 26 July 2020
 
 #>
 
@@ -45,11 +42,7 @@ param (
 
     [Parameter()]
     [switch]
-    $IncludePartitionStyle,
-
-    [Parameter()]
-    [switch]
-    $IncludeError
+    $IncludeNonResponding
 )
 
 # Scriptblock for Invoke-Command
@@ -57,55 +50,31 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
     
-    Write-Verbose "Getting Secure Boot state on $env:COMPUTERNAME"
+    Write-Verbose "Getting Secure Boot state on $env:COMPUTERNAME."
 
     $Result = [PSCustomObject]@{
 
-        SecureBootState = $null
-        PartitionStyle = $null
-        Error = $null
+        ComputerName = $env:COMPUTERNAME
+        SecureBoot = $null
     }
 
     try {
 
-        switch (Confirm-SecureBootUEFI -Verbose:$false -ErrorAction Stop) {
+        switch (Confirm-SecureBootUEFI -ErrorAction Stop) {
 
             'True' {$SecureBoot = 'Enabled'}
             'False' {$SecureBoot = 'Disabled'}
         }
 
-        $Result.SecureBootState = $SecureBoot
+        $Result.SecureBoot = $SecureBoot
     }
     catch [System.PlatformNotSupportedException] {
 
-        $SecureBoot = 'Not Supported'
-    }
-    catch [System.UnauthorizedAccessException] {
-
-        $Result.Error = 'Confirm-SecureBootUEFI: Access denied'
-    }
-
-    if ($Using:IncludePartitionStyle.IsPresent) {
-
-        try {
-
-            $PartitionStyle = (Get-Disk -Verbose:$false -ErrorAction Stop).PartitionStyle
-
-            if ($PartitionStyle.Count -gt 1) {
-
-                $PartitionStyle = $PartitionStyle -join ','
-            }
-
-            $Result.PartitionStyle = $PartitionStyle
-        }
-        catch {
-
-            $Result.Error = $_.FullyQualifiedErrorId
-        }
+        $Result.SecureBoot = 'Not Supported'
     }
 
     $Result
-} 
+}
 
 # Parameters for Invoke-Command
 $InvokeCommandParams = @{
@@ -115,59 +84,31 @@ $InvokeCommandParams = @{
     ErrorAction = 'SilentlyContinue'
 }
 
-if ($IncludeError.IsPresent) {
+switch ($IncludeNonResponding.IsPresent) {
 
-    $InvokeCommandParams.Add('ErrorVariable','icmErrors')
-}
+    'True' {
 
-Invoke-Command @InvokeCommandParams | ForEach-Object {
+        $InvokeCommandParams.Add('ErrorVariable','NonResponding')
 
-    if ($IncludePartitionStyle.IsPresent) {
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property *, ErrorId -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
 
-        [PSCustomObject]@{
+        if ($NonResponding) {
 
-            ComputerName = $_.PSComputerName.ToUpper()
-            SecureBootState = $_.SecureBootState
-            PartitionStyle = $_.PartitionStyle
-            Error = $_.Error
-        }
-    }
-    else {
-
-        [PSCustomObject]@{
-
-            ComputerName = $_.PSComputerName.ToUpper()
-            SecureBootState = $_.SecureBootState
-            Error = $_.Error
-        }
-    }
-}
-
-if ($IncludeError.IsPresent) {
-
-    if ($icmErrors) {
-
-        foreach ($icmError in $icmErrors) {
-
-            if ($IncludePartitionStyle.IsPresent) {
+            foreach ($Computer in $NonResponding) {
 
                 [PSCustomObject]@{
 
-                    ComputerName = $icmError.TargetObject.ToUpper()
-                    SecureBootState = $null
-                    PartitionStyle = $null
-                    Error = $icmError.FullyQualifiedErrorId
-                }
-            }
-            else {
-
-                [PSCustomObject]@{
-
-                    ComputerName = $icmError.TargetObject.ToUpper()
-                    SecureBootState = $null
-                    Error = $icmError.FullyQualifiedErrorId
+                    ComputerName = $Computer.TargetObject.ToUpper()
+                    SecureBoot = $null
+                    ErrorId = $Computer.FullyQualifiedErrorId
                 }
             }
         }
+    }
+    'False' {
+
+        Invoke-Command @InvokeCommandParams | 
+        Select-Object -Property * -ExcludeProperty PSComputerName, PSShowComputerName, RunspaceId
     }
 }
