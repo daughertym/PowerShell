@@ -30,7 +30,7 @@ None.
 .\Send-Message -ComputerName PC01 -Message 'Hello World!'
 
 .EXAMPLE
-.\Send-Message -ComputerName (Get-Content C:\computers.txt) -Message 'Hello World!' -ErrorAction SilentlyContinue
+.\Send-Message -ComputerName (Get-Content C:\computers.txt) -Message 'Hello World!' -AsLoop -ErrorAction SilentlyContinue
 
 .NOTES
 Author: Matthew D. Daugherty
