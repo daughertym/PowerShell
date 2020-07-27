@@ -86,7 +86,7 @@ if ($ID -match $Pattern) {
 
         ComputerName = $ComputerName
         ScriptBlock = $InvokeCommandScriptBlock
-        ErrorAction = 'SilentlyContinue'
+        ErrorAction = $ErrorActionPreference
     }
 
     switch ($IncludeNonResponding.IsPresent) {
