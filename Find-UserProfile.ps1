@@ -19,7 +19,7 @@ None. You cannot pipe objects.
 System.Object
 
 .EXAMPLE
-.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith'
+.\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith' -ErrorAction SilentlyContinue
 
 .EXAMPLE
 .\Find-UserProfile (Get-Content C:\computers.txt) -UserName 'bob.smith' -IncludeNonResponding -Verbose |
@@ -77,7 +77,7 @@ $InvokeCommandParams = @{
 
     ComputerName = $ComputerName
     ScriptBlock = $InvokeCommandScriptBlock
-    ErrorAction = 'SilentlyContinue'
+    ErrorAction = $ErrorActionPreference
 }
 
 switch ($IncludeNonResponding.IsPresent) {
