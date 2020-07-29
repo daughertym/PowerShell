@@ -14,7 +14,7 @@ None.
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 27 July 2020
+Date Modified: 29 July 2020
 
 #>
 
@@ -34,7 +34,7 @@ try {
 
     $BiosSettings = Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock {
 
-        Get-WmiObject -Namespace root\HP\InstrumentedBIOS -Class HP_BiosEnumeration
+        Get-WmiObject -Namespace 'root\HP\InstrumentedBIOS' -Class 'HP_BiosEnumeration'
     }
 
     $SettingBios = $true
@@ -62,7 +62,7 @@ try {
 
                     $BiosPassword = 'password'
                     $BiosPassword_UTF = "<utf-16/>$BiosPassword"
-                    $Bios = Get-WmiObject -Namespace root\HP\InstrumentedBIOS -Class HP_BiosSettingInterface
+                    $Bios = Get-WmiObject -Namespace 'root\HP\InstrumentedBIOS' -Class 'HP_BiosSettingInterface'
                     $Bios.SetBiosSetting($Using:SettingName,$Using:NewValue,$BiosPassword_UTF)
                 }
 
