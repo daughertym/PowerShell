@@ -10,7 +10,7 @@ Specifies the computers to invoke gpupdate /force on.
 None. You cannot pipe objects.
 
 .OUTPUTS
-System.Object
+None.
 
 .EXAMPLE
 .\Invoke-GPUpdate -ComputerName PC01,PC02,PC03
