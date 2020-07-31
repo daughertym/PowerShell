@@ -37,6 +37,16 @@ System.Object
 .\Get-DuplicateFile -Path C:\SomePath\SomeFolder -ByName | Select-Object Name,FullName |
 Export-Csv DuplicateFiles.csv -NoTypeInformation
 
+.EXAMPLE
+$Duplicates = .\Get-DuplicateFile -Path C:\SomePath\SomeFolder -ByName | Select-Object Name,FullName
+
+$ToRemove = $Duplicates | Out-GridView -OutputMode Multiple
+
+$ToRemove | ForEach-Object {
+
+    Remove-Item $_.FullName -Force -Verbose
+}
+
 .NOTES
 Author: Matthew D. Daugherty
 Date Modified: 30 July 2020
