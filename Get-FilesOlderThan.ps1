@@ -7,7 +7,7 @@ Get files older than a specified number of days.
 Specifies a path to a location.
 
 .PARAMETER Include
-Specifies, as a string array, an item or items that should be included.
+Specifies an item or items that should be included.
 
 .PARAMETER NumberOfDays
 Specifies the number of days to set threshold to.
