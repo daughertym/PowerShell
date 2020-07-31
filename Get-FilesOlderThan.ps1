@@ -4,10 +4,10 @@
 Get files older than a specified number of days.
 
 .PARAMETER Path
-Specifies the path to the folder to query.
+Specifies a path to a location.
 
 .PARAMETER Include
-Specifies the file type(s) to include.
+Specifies, as a string array, an item or items that should be included.
 
 .PARAMETER NumberOfDays
 Specifies the number of days to set threshold to.
@@ -17,8 +17,11 @@ Settting NumberOfDays to 30 would find files older than 30 days.
 .PARAMETER Recurse
 Optional switch for recurse.
 
+.PARAMETER CreationTime
+Optional switch to filter by CreationTime rather than LastWriteTime.
+
 .INPUTS
-None. You cannot pipe objects to Get-FilesOlderThan
+None. You cannot pipe objects.
 
 .OUTPUTS
 System.Object
@@ -30,36 +33,39 @@ System.Object
 .\Get-FilesOlderThan -Path C:\SomePath\SomeFolder -NumberOfDays 30 -Recurse
 
 .EXAMPLE
+.\Get-FilesOlderThan -Path C:\SomePath\SomeFolder -NumberOfDays 30 -CreationTime
+
+.EXAMPLE
 .\Get-FilesOlderThan -Path C:\SomePath\SomeFolder -Include *.txt,*.pdf -NumberOfDays 30
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 17 July 2020
+Date Modified: 30 July 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    # Mandatory parameter for path
     [Parameter(Mandatory)]
     [string]
     $Path,
 
-    # Optional paramater to include certain file type(s)
     [Parameter()]
     [string[]]
     $Include,
 
-    # Mandatory parameter for number of days
     [Parameter(Mandatory)]
     [int]
     $NumberOfDays,
 
-    # Optional switch for recurse
     [Parameter()]
     [switch]
-    $Recurse
+    $Recurse,
+
+    [Parameter()]
+    [switch]
+    $CreationTime
 )
 
 # Make sure $Path exists
@@ -84,7 +90,7 @@ $gciParams = @{
     Force = $true
 }
 
-if ($Include.IsPresent) {
+if ($PSBoundParameters.ContainsKey('Include')) {
 
     $gciParams.Add('Include',$Include)
 
@@ -98,5 +104,11 @@ if ($Recurse.IsPresent) {
 
 $Threshold = (Get-Date).AddDays(-$NumberOfDays)
 
-Get-ChildItem @gciParams |
-Where-Object {$_.LastWriteTime -lt $Threshold}
+if ($CreationTime.IsPresent) {
+
+    Get-ChildItem @gciParams | Where-Object {$_.CreationTime -lt $Threshold}
+}
+else {
+
+    Get-ChildItem @gciParams | Where-Object {$_.LastWriteTime -lt $Threshold}
+}
