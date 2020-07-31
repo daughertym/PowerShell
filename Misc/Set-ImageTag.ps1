@@ -138,8 +138,6 @@ if ($dllFile) {
 
         } # end foreach ($Tag in $Row.Tags -split ',')
 
-        [void]$ImageObject.Save()
-
     } # end foreach ($Row in $CsvFile)
 
 } # end if ($dllFile)
