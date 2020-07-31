@@ -68,6 +68,8 @@ param (
     $CreationTime
 )
 
+$ErrorActionPreference = 'SilentlyContinue'
+
 # Make sure $Path exists
 if (-not(Test-Path -Path $Path)) {
 
@@ -86,15 +88,9 @@ if (-not(Get-Item -Path $Path).PSIsContainer) {
 $gciParams = @{
 
     Path = $Path
+    Include = $Include
     File = $true
     Force = $true
-}
-
-if ($PSBoundParameters.ContainsKey('Include')) {
-
-    $gciParams.Add('Include',$Include)
-
-    $gciParams.Path = "$Path\*"
 }
 
 if ($Recurse.IsPresent) {
