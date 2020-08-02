@@ -42,15 +42,21 @@ $InvokeCommandScriptBlock = {
     
     Write-Verbose "Enabling Secure Boot on $env:COMPUTERNAME." -Verbose
 
-    $BiosSettings = Get-WmiObject -Namespace 'root/hp/instrumentedBIOS' -Class 'HP_BiosEnumeration'
+    $BiosSettings = Get-WmiObject -Namespace root/hp/instrumentedBIOS -Class HP_BiosEnumeration
 
     $BiosPassword = 'password'
     $BiosPassword_UTF = "<utf-16/>$BiosPassword"
-    $Bios = Get-WmiObject -Namespace 'root\HP\InstrumentedBIOS' -Class 'HP_BiosSettingInterface'
+    $Bios = Get-WmiObject -Namespace root\HP\InstrumentedBIOS -Class HP_BiosSettingInterface
 
-    if ($BiosSettings | Where-Object Name -eq 'Configure Legacy Support and Secure Boot') {
+    if ($BiosSettings | Where-Object PossibleValues -Contains 'Legacy Support Disable and Secure Boot Enable') {
 
         [void]$Bios.SetBiosSetting('Configure Legacy Support and Secure Boot', 'Legacy Support Disable and Secure Boot Enable', $BiosPassword_UTF)
+        [void]$Bios.SetBiosSetting('Legacy Boot Options', 'Disable', $BiosPassword_UTF)
+        [void]$Bios.SetBiosSetting('UEFI Boot Options', 'Enable', $BiosPassword_UTF)
+    }
+
+    if ($BiosSettings | Where-Object PossibleValues -Contains 'Disable Legacy Support and Enable Secure Boot') {
+
         [void]$Bios.SetBiosSetting('Configure Legacy Support and Secure Boot', 'Disable Legacy Support and Enable Secure Boot', $BiosPassword_UTF)
         [void]$Bios.SetBiosSetting('Legacy Boot Options', 'Disable', $BiosPassword_UTF)
         [void]$Bios.SetBiosSetting('UEFI Boot Options', 'Enable', $BiosPassword_UTF)
