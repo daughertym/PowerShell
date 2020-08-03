@@ -30,6 +30,9 @@ None. You cannot pipe objects.
 System.Object
 
 .EXAMPLE
+.\Get-InstalledSoftware -Name 'Google Chrome'
+
+.EXAMPLE
 .\Get-InstalledSoftware -ComputerName PC01,PC02,PC03 -Filter Adobe
 
 .EXAMPLE
@@ -45,18 +48,21 @@ Export-Csv Chrome.csv -NoTypeInformation
 .EXAMPLE
 .\Get-InstalledSoftware -ComputerName PC01 | Export-Csv InstalledSoftware.csv -NoTypeInformation
 
+.EXAMPLE
+.\Get-InstalledSoftware -ComputerName PC01 | Out-GridView
+
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 27 July 2020
+Date Modified: 2 August 2020
 
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Filter')]
 param (
 
-    [Parameter(Mandatory)]
+    [Parameter()]
     [string[]]
-    $ComputerName,
+    $ComputerName = $env:COMPUTERNAME,
 
     [Parameter(ParameterSetName = 'Filter')]
     [string]
@@ -79,40 +85,46 @@ $InvokeCommandScriptBlock = {
 
     Write-Verbose "Getting installed software on $env:COMPUTERNAME."
 
-    $ScriptBlock = {
+    $32Bit = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
 
-        Get-ChildItem -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall', 
-        'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Get-ItemProperty
-    }
+    $64Bit = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
 
-    if ($Using:Name) {
+    $GetChildItemParams = @{
 
-        $InstalledSoftware = Invoke-Command -ScriptBlock $ScriptBlock | Where-Object DisplayName -EQ $Using:Name
-
-        $Query = $Using:Name
-    }
-
-    elseif ($Using:Filter) {
-
-        $InstalledSoftware = Invoke-Command -ScriptBlock $ScriptBlock | Where-Object DisplayName -Like "*$Using:Filter*"
-
-        $Query = $Using:Filter
-    }
-    else {
-
-        $InstalledSoftware =  Invoke-Command -ScriptBlock $ScriptBlock
+        Path = $32Bit, $64Bit
     }
 
     $Result = [PSCustomObject]@{
 
         ComputerName = $env:COMPUTERNAME
-        Query = $Query
+        Name = $null
+        Filter = $null
         SoftwareFound = $false
         DisplayName = $null
         Publisher = $null
         DisplayVersion = $null
         InstallDate = $null
         UninstallString = $null
+    }
+
+    if ($Using:Name) {
+
+        $InstalledSoftware = Get-ChildItem @GetChildItemParams | Get-ItemProperty | 
+        Where-Object DisplayName -EQ $Using:Name
+
+        $Result.Name = $Using:Name
+    }
+
+    elseif ($Using:Filter) {
+
+        $InstalledSoftware = Get-ChildItem @GetChildItemParams | Get-ItemProperty | 
+        Where-Object DisplayName -Like "*$Using:Filter*"
+
+        $Result.Filter = $Using:Filter
+    }
+    else {
+
+        $InstalledSoftware = Get-ChildItem @GetChildItemParams | Get-ItemProperty
     }
 
     if ($InstalledSoftware) {
@@ -159,7 +171,9 @@ switch ($IncludeNonResponding.IsPresent) {
                 [PSCustomObject]@{
 
                     ComputerName = $Computer.TargetObject.ToUpper()
-                    Query = $null
+                    Name = $null
+                    Filter = $null
+                    SoftwareFound = $null
                     DisplayName = $null
                     Publisher = $null
                     DisplayVersion = $null
