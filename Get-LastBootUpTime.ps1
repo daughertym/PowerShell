@@ -16,6 +16,9 @@ None. You cannot pipe objects.
 System.Object
 
 .EXAMPLE
+.\Get-LastBootUpTime
+
+.EXAMPLE
 .\Get-LastBootUpTime -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
