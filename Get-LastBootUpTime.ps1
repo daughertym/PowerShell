@@ -34,9 +34,9 @@ Date Modified: 27 July 2020
 [CmdletBinding()]
 param (
 
-    [Parameter(Mandatory)]
+    [Parameter()]
     [string[]]
-    $ComputerName,
+    $ComputerName = $env:COMPUTERNAME,
 
     [Parameter()]
     [switch]
