@@ -16,6 +16,9 @@ None. You cannot pipe objects.
 System.Object
 
 .EXAMPLE
+.\Get-LocalUserInfo
+
+.EXAMPLE
 .\Get-LocalUserInfo | Where-Object Enabled
 
 .EXAMPLE
@@ -27,7 +30,7 @@ Export-Csv UserInfo.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 27 July 2020
+Date Modified: 2 August 2020
 
 #>
 
