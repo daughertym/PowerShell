@@ -16,6 +16,9 @@ None. You cannot pipe objects.
 System.Object
 
 .EXAMPLE
+.\Get-SecureBootState
+
+.EXAMPLE
 .\Get-SecureBootState -ComputerName PC01,PC02,PC03
 
 .EXAMPLE
@@ -27,7 +30,7 @@ Export-Csv SecureBoot.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 27 July 2020
+Date Modified: 2 August 2020
 
 #>
 
@@ -36,9 +39,9 @@ Date Modified: 27 July 2020
 [CmdletBinding()]
 param (
 
-    [Parameter(Mandatory)]
+    [Parameter()]
     [string[]]
-    $ComputerName,
+    $ComputerName = $env:COMPUTERNAME,
 
     [Parameter()]
     [switch]
