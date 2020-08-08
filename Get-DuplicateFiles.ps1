@@ -78,8 +78,6 @@ param (
     $Recurse
 )
 
-$ErrorActionPreference = 'SilentlyContinue'
-
 # Make sure $Path exists
 if (-not(Test-Path -Path $Path)) {
 
@@ -125,7 +123,7 @@ if ($ByName.IsPresent) {
 
 if ($ByHash.IsPresent) {
 
-    $Files = Get-ChildItem @gciParams | Get-FileHash
+    $Files = Get-ChildItem @gciParams | Get-FileHash -ErrorAction SilentlyContinue
 
     $Groups = $Files | Group-Object -Property Hash
 
