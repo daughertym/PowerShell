@@ -1,15 +1,15 @@
 <#
 
 .SYNOPSIS
-Confirm if a certain hot fix is installed on computers.
+Confirm if a certain hot fix is installed.
 
 .PARAMETER ComputerName
-Specifies the computers to query.
+Specifies the computer to query.
 
 .PARAMETER ID
-Specifies the hot fix ID to check for.
+Specifies the hot fix ID to confirm.
 
-.PARAMETER IncludeError
+.PARAMETER IncludeNonResponding 
 Optional switch to include nonresponding computers.
 
 .INPUTS
@@ -30,16 +30,16 @@ Export-Csv KB4559309.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 27 July 2020
+Date Modified: 31 August 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    [Parameter(Mandatory)]
+    [Parameter()]
     [string[]]
-    $ComputerName,
+    $ComputerName = $env:COMPUTERNAME,
 
     [Parameter(Mandatory)]
     [string]
