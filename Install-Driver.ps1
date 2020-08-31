@@ -21,8 +21,8 @@ Inside Drivers folder create subfolders for your driver(s).
 
 Put driver files in their respective folders.
 
-.PARAMETER IncludeError
-Optional switch to include errors.
+.PARAMETER IncludeNonRespondingng 
+Optional switch to include nonresponding computers.
 
 .INPUTS
 None. You cannot pipe objects.
@@ -41,7 +41,7 @@ System.Object
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 27 July 2020
+Date Modified: 31 August 2020
 
 #>
 
