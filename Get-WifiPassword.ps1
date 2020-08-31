@@ -1,7 +1,7 @@
 <#
 
 .SYNOPSIS
-Get wifi password.
+Get wifi password(s).
 
 .PARAMETER ComputerName
 Specifies the computer to query.
@@ -49,7 +49,7 @@ $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
 
-    Write-Verbose "Getting Wifi passwords on $env:COMPUTERNAME."
+    Write-Verbose "Getting Wifi password(s) on $env:COMPUTERNAME."
 
     $Profiles = netsh wlan show profiles | 
         Select-String -Pattern 'All User Profile' | 
