@@ -1,13 +1,13 @@
 <#
 
 .SYNOPSIS
-Copy file from computers.
+Copy file from computer.
 
 .PARAMETER ComputerName
-Specifies the computers to copy file from.
+Specifies the computer to copy file from.
 
 .PARAMETER Path
-Specifies the path to file to copy from computers.
+Specifies the path to the file to copy.
 
 .PARAMETER Destination
 Specifies the destination to copy file to.
@@ -29,7 +29,7 @@ System.Object
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 16 August 2020
+Date Modified: 31 August 2020
 
 #>
 
