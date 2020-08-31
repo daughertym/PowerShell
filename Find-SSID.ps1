@@ -3,7 +3,7 @@
 .SYNOPSIS
 Find SSID in netsh wlan show profiles on computers.
 
-Shows which computers have connected to a certain WiFi.
+Shows which computers have connected to a certain Wi-Fi.
 
 .PARAMETER ComputerName
 Specifies the computers to query.
@@ -29,16 +29,16 @@ Export-Csv FindSSID.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 29 July 2020
+Date Modified: 31 August 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    [Parameter(Mandatory)]
+    [Parameter()]
     [string[]]
-    $ComputerName,
+    $ComputerName = $env:COMPUTERNAME,
 
     [Parameter()]
     [string]
