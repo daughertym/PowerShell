@@ -1,15 +1,15 @@
 <#
 
 .SYNOPSIS
-Backup a user profile from a remote computer.
+Backup user profile(s).
 
 .PARAMETER ComputerName
-Specifies the computer to backup user profile from.
+Specifies the computer to backup user profile(s) from.
 
 .PARAMETER Destination
 Specifies backup destination.
 
-Default is /Desktop/Backups
+Default is /Desktop/UserProfile Backups
 
 .INPUTS
 None.
@@ -18,30 +18,24 @@ None.
 None.
 
 .EXAMPLE
-.\Backup-UserProfile -ComputerName PC01
-
-.EXAMPLE
-.\Backup-UserProfile -ComputerName PC01 -Destination C:\Users\UserName\Desktop\MyBackups
-
-.EXAMPLE
-.\Backup-UserProfile -ComputerName PC01 -Destination \\ComputerName\C$\Users\UserName\Desktop\Backups
+.\Backup-UserProfile -ComputerName PC01 -Destination \\ComputerName\C$\UserName\Desktop\Backups
 
 .NOTES
 Author: Matthew D. Daugherty
-Date Modified: 27 July 2020
+Date Modified: 31 August 2020
 
 #>
 
 [CmdletBinding()]
 param (
 
-    [Parameter(Mandatory)]
+    [Parameter()]
     [string]
-    $ComputerName,
+    $ComputerName = $env:COMPUTERNAME,
 
     [Parameter()]
     [string]
-    $Destination = "$env:USERPROFILE\Desktop\Backups"
+    $Destination = "$env:USERPROFILE\Desktop\UserProfile Backups"
 )
 
 $ComputerName = $ComputerName.ToUpper()
@@ -109,31 +103,44 @@ if (Test-Path -Path "\\$ComputerName\C$") {
 
         (Get-ChildItem -Path 'C:\Users' | Sort-Object Name -Descending).Name
 
-    } | Out-GridView -Title 'Select user profile to backup' -OutputMode Single
+    } | Out-GridView -Title 'Select user profile to backup' -OutputMode Multiple
 
     if ($ProfileToBackup) {
 
         $Quser = Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock $InvokeCommandScriptBlock
 
-        if (-not($Quser.UserName -contains $ProfileToBackup)) {
+        foreach ($User in $ProfileToBackup) {
 
-            $BackupDirectory = New-Item -Path $Destination -ItemType Directory -Name $ProfileToBackup
+            if (-not($Quser.UserName -contains $User)) {
 
-            $BackupPath = Split-Path -Path $BackupDirectory -NoQualifier
+                if (-not(Test-Path -Path "$Destination\$User")) {
 
-            $Source = "\\$ComputerName\C$\Users\$ProfileToBackup"
+                    $BackupDirectory = New-Item -Path $Destination -ItemType Directory -Name $User
+    
+                    $BackupPath = Split-Path -Path $BackupDirectory -NoQualifier
+                }
+                else {
 
-            $Destination = "\\$env:COMPUTERNAME\c$\$BackupPath"
+                    $BackupDirectory = (Get-ChildItem -Path $Destination | Where-Object Name -EQ $User).FullName
 
-            Robocopy.exe  $Source $Destination /S /XJD /XD 'AppData' /XF 'NTUSER.DAT' /R:0 /W:0 /MT:16
+                    $BackupPath = Split-Path -Path $BackupDirectory -NoQualifier
+                }
 
-            Invoke-Item -Path $BackupDirectory
+                $Source = "\\$ComputerName\C$\Users\$User"
+    
+                $Destination = "\\$env:COMPUTERNAME\c$\$BackupPath"
+    
+                Robocopy.exe  $Source $Destination /S /XJD /XD 'AppData' /XF 'NTUSER.DAT' /R:0 /W:0 /MT:16
+    
+                Invoke-Item -Path $BackupDirectory
+    
+            } # end if (-not($Quser.UserName -contains $ProfileToBackup))
+            else {
+    
+                Write-Warning "$User is currently logged onto $ComputerName. Script is ending."
+            }
 
-        } # end if (-not($Quser.UserName -contains $ProfileToBackup))
-        else {
-
-            Write-Warning "$ProfileToBackup is currently logged onto $ComputerName. Script is ending."
-        }
+        } # end foreach ($User in $ProfileToBackup)
 
     } # end ($ProfileToBackup)
 
