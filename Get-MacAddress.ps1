@@ -26,7 +26,7 @@ System.Object
 
 .EXAMPLE
 .\Get-MacAddress (Get-Content C:\computers.txt) -IncludeNonResponding -Verbose |
-Export-Csv InstallDate.csv -NoTypeInformation
+Export-Csv MacAddress.csv -NoTypeInformation
 
 .NOTES
 Author: Matthew D. Daugherty
