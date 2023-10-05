@@ -49,19 +49,19 @@ param (
     $IncludeNonResponding
 )
 
-$FileName = Split-Path -Path $FilePath -Leaf
+$FilePath = $FilePath
 
 # Script block for Invoke-Command
 $InvokeCommandScriptBlock = {
 
     $VerbosePreference = $Using:VerbosePreference
     
-    Write-Verbose "Querying $Using:FileName on $env:COMPUTERNAME."
+    Write-Verbose "Querying $Using:FilePath on $env:COMPUTERNAME"
 
     $Result = [PSCustomObject]@{
 
         ComputerName = $env:COMPUTERNAME
-        FileName = $Using:FileName
+        FilePath = $Using:FilePath
         FileExists = $false
         FileVersion = $null
         LastWriteTime = $null
@@ -105,7 +105,7 @@ switch ($IncludeNonResponding.IsPresent) {
                 [PSCustomObject]@{
 
                     ComputerName = $Computer.TargetObject.ToUpper()
-                    FileName = $null
+                    FilePath = $null
                     FileExists = $null
                     FileVersion = $null
                     LastWriteTime = $null
